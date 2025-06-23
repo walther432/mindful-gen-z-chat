@@ -1,7 +1,7 @@
 
 import { useState } from 'react';
-import { Plus, Send } from 'lucide-react';
 import Navigation from '@/components/ui/navigation';
+import ChatInput from '@/components/therapy/ChatInput';
 
 type TherapyMode = 'reflect' | 'recover' | 'rebuild' | 'evolve';
 
@@ -177,33 +177,14 @@ const Therapy = () => {
             )}
           </div>
 
-          {/* Input Area */}
-          <div className="space-y-3">
-            <div className="flex items-center space-x-3">
-              <button className="p-2 rounded-full bg-secondary hover:bg-secondary/80 transition-colors">
-                <Plus className="w-5 h-5 text-foreground" />
-              </button>
-              <div className="flex-1 relative">
-                <input
-                  type="text"
-                  value={inputText}
-                  onChange={(e) => setInputText(e.target.value)}
-                  onKeyPress={(e) => e.key === 'Enter' && handleSendMessage()}
-                  placeholder="Type something you're feeling…"
-                  className="w-full bg-secondary border border-border/50 rounded-lg px-4 py-3 text-foreground placeholder-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50"
-                  disabled={messages.length === 0}
-                />
-                <button
-                  onClick={handleSendMessage}
-                  disabled={!inputText.trim() || messages.length === 0}
-                  className="absolute right-2 top-1/2 transform -translate-y-1/2 p-2 bg-primary text-white rounded-md hover:bg-primary/80 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  <Send className="w-4 h-4" />
-                </button>
-              </div>
-            </div>
-            <p className="text-sm text-foreground">{uploadsLeft} uploads per day left</p>
-          </div>
+          {/* Chat Input */}
+          <ChatInput
+            inputText={inputText}
+            setInputText={setInputText}
+            onSendMessage={handleSendMessage}
+            disabled={messages.length === 0}
+            uploadsLeft={uploadsLeft}
+          />
         </div>
 
         {/* Tips Section */}
