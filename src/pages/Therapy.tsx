@@ -2,6 +2,7 @@
 import { useState } from 'react';
 import Navigation from '@/components/ui/navigation';
 import ChatInput from '@/components/therapy/ChatInput';
+import { useAuth } from '@/contexts/AuthContext';
 
 type TherapyMode = 'reflect' | 'recover' | 'rebuild' | 'evolve';
 
@@ -10,49 +11,51 @@ interface Message {
   text: string;
   isUser: boolean;
   timestamp: Date;
+  images?: string[];
 }
 
 const Therapy = () => {
+  const { isPremium } = useAuth();
   const [selectedMode, setSelectedMode] = useState<TherapyMode>('reflect');
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputText, setInputText] = useState('');
-  const [uploadsLeft] = useState(5); // For free users
+  const [messageCount, setMessageCount] = useState(0);
 
   const modes = [
     {
       id: 'reflect' as TherapyMode,
       name: 'Reflect',
-      icon: '🔵',
-      color: 'from-blue-500 to-blue-600',
-      borderColor: 'border-blue-500',
-      bgColor: 'bg-blue-500/10',
+      icon: '🟣',
+      color: 'from-purple-500 to-purple-600',
+      borderColor: 'border-purple-500',
+      bgColor: 'bg-purple-500/10',
       description: 'Process your thoughts and emotions with gentle guidance'
     },
     {
       id: 'recover' as TherapyMode,
       name: 'Recover',
-      icon: '🟡',
-      color: 'from-yellow-500 to-orange-500',
-      borderColor: 'border-yellow-500',
-      bgColor: 'bg-yellow-500/10',
+      icon: '🔵',
+      color: 'from-blue-500 to-blue-600',
+      borderColor: 'border-blue-500',
+      bgColor: 'bg-blue-500/10',
       description: 'Heal from trauma and difficult experiences'
     },
     {
       id: 'rebuild' as TherapyMode,
       name: 'Rebuild',
-      icon: '🟣',
-      color: 'from-purple-500 to-pink-500',
-      borderColor: 'border-purple-500',
-      bgColor: 'bg-purple-500/10',
+      icon: '🟢',
+      color: 'from-green-500 to-green-600',
+      borderColor: 'border-green-500',
+      bgColor: 'bg-green-500/10',
       description: 'Reconstruct your sense of self and relationships'
     },
     {
       id: 'evolve' as TherapyMode,
       name: 'Evolve',
-      icon: '🟢',
-      color: 'from-green-500 to-emerald-500',
-      borderColor: 'border-green-500',
-      bgColor: 'bg-green-500/10',
+      icon: '🟡',
+      color: 'from-yellow-500 to-orange-500',
+      borderColor: 'border-yellow-500',
+      bgColor: 'bg-yellow-500/10',
       description: 'Grow beyond your current limitations'
     }
   ];
@@ -80,6 +83,7 @@ const Therapy = () => {
 
   const handleSendMessage = () => {
     if (!inputText.trim()) return;
+    if (!isPremium && messageCount >= 50) return;
 
     const userMessage: Message = {
       id: Date.now().toString(),
@@ -90,8 +94,9 @@ const Therapy = () => {
 
     setMessages(prev => [...prev, userMessage]);
     setInputText('');
+    setMessageCount(prev => prev + 1);
 
-    // Simulate AI response
+    // Simulate AI response (placeholder for future GPT integration)
     setTimeout(() => {
       const aiResponse: Message = {
         id: (Date.now() + 1).toString(),
@@ -110,6 +115,19 @@ const Therapy = () => {
       <Navigation />
       
       <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {/* Premium Status Banner */}
+        {isPremium && (
+          <div className="mb-6 bg-gradient-to-r from-yellow-500/10 to-orange-500/10 border border-yellow-500/20 rounded-lg p-4">
+            <div className="flex items-center space-x-2">
+              <span className="bg-gradient-to-r from-yellow-400 to-orange-500 text-black text-sm px-3 py-1 rounded-full font-semibold">
+                PRO
+              </span>
+              <span className="text-foreground font-medium">Premium Active</span>
+              <span className="text-muted-foreground">- Unlimited messages & uploads</span>
+            </div>
+          </div>
+        )}
+
         {/* Mode Selector */}
         <div className="mb-8">
           <h1 className="text-2xl font-bold text-foreground mb-6">Choose your therapy mode</h1>
@@ -166,6 +184,13 @@ const Therapy = () => {
                     }`}
                   >
                     <p>{message.text}</p>
+                    {message.images && message.images.length > 0 && (
+                      <div className="mt-2 space-y-1">
+                        {message.images.map((img, idx) => (
+                          <img key={idx} src={img} alt="Upload" className="max-w-full rounded" />
+                        ))}
+                      </div>
+                    )}
                     <p className={`text-xs mt-1 ${
                       message.isUser ? 'text-white/70' : 'text-muted-foreground'
                     }`}>
@@ -183,7 +208,7 @@ const Therapy = () => {
             setInputText={setInputText}
             onSendMessage={handleSendMessage}
             disabled={messages.length === 0}
-            uploadsLeft={uploadsLeft}
+            messageCount={messageCount}
           />
         </div>
 
@@ -194,6 +219,7 @@ const Therapy = () => {
             <p>• Be honest about your feelings – there's no judgment here.</p>
             <p>• Take your time to reflect before responding.</p>
             <p>• Switch modes based on what you need most right now.</p>
+            <p>• Upload images to share visual context with your AI therapist.</p>
             <p>• Remember: This is a safe space for your thoughts.</p>
           </div>
         </div>
