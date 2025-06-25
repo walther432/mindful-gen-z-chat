@@ -1,7 +1,6 @@
 
 import { useState } from 'react';
 import Navigation from '@/components/ui/navigation';
-import Footer from '@/components/ui/footer';
 import ChatInput from '@/components/therapy/ChatInput';
 import { useAuth } from '@/contexts/AuthContext';
 
@@ -120,7 +119,7 @@ const Therapy = () => {
   const selectedModeData = modes.find(mode => mode.id === selectedMode);
 
   return (
-    <div className="min-h-screen relative overflow-hidden flex flex-col">
+    <div className="min-h-screen relative overflow-hidden">
       {/* Full-screen background image with smooth transitions */}
       <div 
         className="absolute inset-0 w-full h-full z-[-10] transition-all duration-500"
@@ -137,7 +136,7 @@ const Therapy = () => {
       
       <Navigation />
       
-      <div className="flex-1 max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8 relative">
+      <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8 relative">
         {/* Premium Status Banner */}
         {isPremium && (
           <div className="mb-6 glass-effect border border-yellow-500/30 rounded-lg p-4">
@@ -247,8 +246,6 @@ const Therapy = () => {
           </div>
         </div>
       </div>
-      
-      <Footer />
     </div>
   );
 };
