@@ -60,6 +60,14 @@ const Therapy = () => {
     }
   ];
 
+  // Map therapy modes to background images
+  const modeToBackgroundImage = {
+    reflect: '/lovable-uploads/a3872cd3-caf3-42ac-99bb-15e21499e310.png',
+    recover: '/lovable-uploads/4e0d3477-805c-4e57-b52c-82fe4a8d1c4f.png',
+    rebuild: '/lovable-uploads/07533b71-b782-4088-844e-83d3b08837e7.png',
+    evolve: '/lovable-uploads/63bfd61c-32c7-4ddb-aa9a-6c5a6d885cc6.png'
+  };
+
   const getModePrompts = (mode: TherapyMode): string => {
     const prompts = {
       reflect: "I'm here to help you reflect on your thoughts and feelings. What's been on your mind lately?",
@@ -111,40 +119,54 @@ const Therapy = () => {
   const selectedModeData = modes.find(mode => mode.id === selectedMode);
 
   return (
-    <div className="min-h-screen gradient-bg">
+    <div className="min-h-screen relative overflow-hidden">
+      {/* Full-screen background image with smooth transitions */}
+      <div 
+        className="absolute inset-0 w-full h-full z-[-10] transition-all duration-500"
+        style={{
+          backgroundImage: `url('${modeToBackgroundImage[selectedMode]}')`,
+          backgroundSize: 'cover',
+          backgroundPosition: 'center',
+          backgroundRepeat: 'no-repeat'
+        }}
+      />
+      
+      {/* Dark overlay for readability */}
+      <div className="absolute inset-0 bg-black/50 z-[-5]" />
+      
       <Navigation />
       
-      <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8 relative">
         {/* Premium Status Banner */}
         {isPremium && (
-          <div className="mb-6 bg-gradient-to-r from-yellow-500/10 to-orange-500/10 border border-yellow-500/20 rounded-lg p-4">
+          <div className="mb-6 glass-effect border border-yellow-500/30 rounded-lg p-4">
             <div className="flex items-center space-x-2">
               <span className="bg-gradient-to-r from-yellow-400 to-orange-500 text-black text-sm px-3 py-1 rounded-full font-semibold">
                 PRO
               </span>
-              <span className="text-foreground font-medium">Premium Active</span>
-              <span className="text-muted-foreground">- Unlimited messages & uploads</span>
+              <span className="text-white font-medium">Premium Active</span>
+              <span className="text-white/80">- Unlimited messages & uploads</span>
             </div>
           </div>
         )}
 
         {/* Mode Selector */}
         <div className="mb-8">
-          <h1 className="text-2xl font-bold text-foreground mb-6">Choose your therapy mode</h1>
+          <h1 className="text-2xl font-bold text-white mb-6">Choose your therapy mode</h1>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             {modes.map((mode) => (
               <button
                 key={mode.id}
                 onClick={() => handleModeSelect(mode.id)}
-                className={`p-4 rounded-lg border transition-all duration-300 ${
+                className={`p-4 rounded-lg border transition-all duration-300 backdrop-blur-sm ${
                   selectedMode === mode.id
-                    ? `${mode.borderColor} ${mode.bgColor} shadow-lg`
-                    : 'border-border/50 hover:border-primary/30 gradient-card'
+                    ? `${mode.borderColor} ${mode.bgColor} shadow-lg border-opacity-80`
+                    : 'border-white/30 hover:border-white/50 glass-effect'
                 }`}
               >
                 <div className="text-2xl mb-2">{mode.icon}</div>
-                <div className="font-semibold text-foreground">{mode.name}</div>
-                <div className="text-xs text-muted-foreground mt-1">{mode.description}</div>
+                <div className="font-semibold text-white">{mode.name}</div>
+                <div className="text-xs text-white/80 mt-1">{mode.description}</div>
               </button>
             ))}
           </div>
@@ -152,22 +174,22 @@ const Therapy = () => {
 
         {/* Selected Mode Banner */}
         {selectedModeData && (
-          <div className={`p-4 rounded-lg border ${selectedModeData.borderColor} ${selectedModeData.bgColor} mb-6`}>
+          <div className={`p-4 rounded-lg border backdrop-blur-sm ${selectedModeData.borderColor} ${selectedModeData.bgColor} mb-6 border-opacity-60`}>
             <div className="flex items-center space-x-3">
               <span className="text-2xl">{selectedModeData.icon}</span>
               <div>
-                <h3 className="font-semibold text-foreground">{selectedModeData.name} Mode</h3>
-                <p className="text-sm text-muted-foreground">{selectedModeData.description}</p>
+                <h3 className="font-semibold text-white">{selectedModeData.name} Mode</h3>
+                <p className="text-sm text-white/80">{selectedModeData.description}</p>
               </div>
             </div>
           </div>
         )}
 
         {/* Chat Area */}
-        <div className="gradient-card rounded-lg border border-border/50 p-6 mb-6">
+        <div className="glass-effect rounded-lg border border-white/30 p-6 mb-6 backdrop-blur-md">
           <div className="h-96 overflow-y-auto mb-6 space-y-4">
             {messages.length === 0 ? (
-              <div className="text-center text-muted-foreground">
+              <div className="text-center text-white/70">
                 <p>Select a therapy mode above to begin your session</p>
               </div>
             ) : (
@@ -177,10 +199,10 @@ const Therapy = () => {
                   className={`flex ${message.isUser ? 'justify-end' : 'justify-start'}`}
                 >
                   <div
-                    className={`max-w-sm p-3 rounded-lg ${
+                    className={`max-w-sm p-3 rounded-lg backdrop-blur-sm ${
                       message.isUser
-                        ? 'bg-primary text-white'
-                        : 'bg-secondary text-foreground'
+                        ? 'bg-primary/80 text-white'
+                        : 'bg-white/20 text-white border border-white/30'
                     }`}
                   >
                     <p>{message.text}</p>
@@ -192,7 +214,7 @@ const Therapy = () => {
                       </div>
                     )}
                     <p className={`text-xs mt-1 ${
-                      message.isUser ? 'text-white/70' : 'text-muted-foreground'
+                      message.isUser ? 'text-white/70' : 'text-white/60'
                     }`}>
                       {message.timestamp.toLocaleTimeString()}
                     </p>
@@ -213,9 +235,9 @@ const Therapy = () => {
         </div>
 
         {/* Tips Section */}
-        <div className="gradient-card rounded-lg border border-border/50 p-6">
-          <h3 className="font-semibold text-foreground mb-4">Tips for your session</h3>
-          <div className="space-y-2 text-green-400">
+        <div className="glass-effect rounded-lg border border-white/30 p-6 backdrop-blur-md">
+          <h3 className="font-semibold text-white mb-4">Tips for your session</h3>
+          <div className="space-y-2 text-green-300">
             <p>• Be honest about your feelings – there's no judgment here.</p>
             <p>• Take your time to reflect before responding.</p>
             <p>• Switch modes based on what you need most right now.</p>
