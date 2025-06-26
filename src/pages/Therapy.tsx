@@ -1,7 +1,8 @@
-
 import { useState } from 'react';
 import Navigation from '@/components/ui/navigation';
 import ChatInput from '@/components/therapy/ChatInput';
+import ReflectiveCheckIn from '@/components/therapy/ReflectiveCheckIn';
+import SpotifyIntegration from '@/components/therapy/SpotifyIntegration';
 import { useAuth } from '@/contexts/AuthContext';
 
 type TherapyMode = 'reflect' | 'recover' | 'rebuild' | 'evolve';
@@ -20,6 +21,7 @@ const Therapy = () => {
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputText, setInputText] = useState('');
   const [messageCount, setMessageCount] = useState(0);
+  const [showReflectiveCheckIn, setShowReflectiveCheckIn] = useState(true);
 
   const modes = [
     {
@@ -60,7 +62,6 @@ const Therapy = () => {
     }
   ];
 
-  // Map therapy modes to background images
   const modeToBackgroundImage = {
     reflect: '/lovable-uploads/a3872cd3-caf3-42ac-99bb-15e21499e310.png',
     recover: '/lovable-uploads/4e0d3477-805c-4e57-b52c-82fe4a8d1c4f.png',
@@ -91,7 +92,10 @@ const Therapy = () => {
 
   const handleSendMessage = () => {
     if (!inputText.trim()) return;
-    if (!isPremium && messageCount >= 50) return;
+    
+    // Updated message limits for premium users
+    const maxMessages = isPremium ? 300 : 50;
+    if (messageCount >= maxMessages) return;
 
     const userMessage: Message = {
       id: Date.now().toString(),
@@ -104,7 +108,6 @@ const Therapy = () => {
     setInputText('');
     setMessageCount(prev => prev + 1);
 
-    // Simulate AI response (placeholder for future GPT integration)
     setTimeout(() => {
       const aiResponse: Message = {
         id: (Date.now() + 1).toString(),
@@ -136,6 +139,11 @@ const Therapy = () => {
       
       <Navigation />
       
+      {/* Reflective Check-In Panel for Premium Users */}
+      {isPremium && showReflectiveCheckIn && (
+        <ReflectiveCheckIn onClose={() => setShowReflectiveCheckIn(false)} />
+      )}
+      
       <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8 relative">
         {/* Premium Status Banner */}
         {isPremium && (
@@ -145,7 +153,7 @@ const Therapy = () => {
                 PRO
               </span>
               <span className="text-white font-medium">Premium Active</span>
-              <span className="text-white/80">- Unlimited messages & uploads</span>
+              <span className="text-white/80">- 300 messages & 25 uploads per day</span>
             </div>
           </div>
         )}
@@ -224,14 +232,19 @@ const Therapy = () => {
             )}
           </div>
 
-          {/* Chat Input */}
-          <ChatInput
-            inputText={inputText}
-            setInputText={setInputText}
-            onSendMessage={handleSendMessage}
-            disabled={messages.length === 0}
-            messageCount={messageCount}
-          />
+          {/* Chat Input with Spotify Integration */}
+          <div className="flex items-center space-x-3">
+            <div className="flex-1">
+              <ChatInput
+                inputText={inputText}
+                setInputText={setInputText}
+                onSendMessage={handleSendMessage}
+                disabled={messages.length === 0}
+                messageCount={messageCount}
+              />
+            </div>
+            <SpotifyIntegration mode={selectedMode} />
+          </div>
         </div>
 
         {/* Tips Section */}
