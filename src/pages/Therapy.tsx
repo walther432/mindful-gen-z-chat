@@ -5,8 +5,7 @@ import Navigation from '@/components/ui/navigation';
 import ChatInput from '@/components/therapy/ChatInput';
 import ReflectiveCheckIn from '@/components/therapy/ReflectiveCheckIn';
 import SpotifyIntegration from '@/components/therapy/SpotifyIntegration';
-import TherapySidebar from '@/components/therapy/TherapySidebar';
-import ModeSelectionModal from '@/components/therapy/ModeSelectionModal';
+import EnhancedTherapySidebar from '@/components/therapy/EnhancedTherapySidebar';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTherapySessions, TherapyMode, TherapySession } from '@/hooks/useTherapySessions';
 import { Button } from '@/components/ui/button';
@@ -25,7 +24,6 @@ const Therapy = () => {
   const [messageCount, setMessageCount] = useState(0);
   const [showReflectiveCheckIn, setShowReflectiveCheckIn] = useState(true);
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [showModeSelection, setShowModeSelection] = useState(false);
   const [uiMessages, setUiMessages] = useState<Message[]>([]);
 
   const {
@@ -65,11 +63,7 @@ const Therapy = () => {
     return prompts[mode];
   };
 
-  const handleNewSession = () => {
-    setShowModeSelection(true);
-  };
-
-  const handleModeSelect = async (mode: TherapyMode, title: string) => {
+  const handleNewSession = async (title: string, mode: TherapyMode) => {
     const session = await createNewSession(title, mode);
     if (session) {
       const welcomeMessage = getModePrompts(mode);
@@ -116,8 +110,8 @@ const Therapy = () => {
       />
       <div className="absolute inset-0 bg-black/50 z-[-5]" />
 
-      {/* Sidebar */}
-      <TherapySidebar
+      {/* Enhanced Sidebar */}
+      <EnhancedTherapySidebar
         onSessionSelect={handleSessionSelect}
         onNewSession={handleNewSession}
         currentSessionId={currentSession?.id}
@@ -165,10 +159,10 @@ const Therapy = () => {
             <div className="mb-6 glass-effect border border-white/30 rounded-lg p-4 backdrop-blur-md">
               <div className="flex items-center space-x-3">
                 <div className="text-2xl">
-                  {currentSession.mode === 'Reflect' && '🟣'}
-                  {currentSession.mode === 'Recover' && '🔵'}
-                  {currentSession.mode === 'Rebuild' && '🟢'}
-                  {currentSession.mode === 'Evolve' && '🟡'}
+                  {currentSession.mode === 'Reflect' && '🧠'}
+                  {currentSession.mode === 'Recover' && '🛠'}
+                  {currentSession.mode === 'Rebuild' && '🌱'}
+                  {currentSession.mode === 'Evolve' && '⚡'}
                 </div>
                 <div>
                   <h2 className="text-xl font-semibold text-white">{currentSession.title}</h2>
@@ -248,13 +242,6 @@ const Therapy = () => {
           </div>
         </div>
       </div>
-
-      {/* Mode Selection Modal */}
-      <ModeSelectionModal
-        isOpen={showModeSelection}
-        onClose={() => setShowModeSelection(false)}
-        onSelect={handleModeSelect}
-      />
     </div>
   );
 };
