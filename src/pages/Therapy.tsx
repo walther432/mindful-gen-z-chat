@@ -1,15 +1,15 @@
+
 import { useState, useEffect } from 'react';
 import { Menu } from 'lucide-react';
 import Navigation from '@/components/ui/navigation';
 import ChatInput from '@/components/therapy/ChatInput';
 import ReflectiveCheckIn from '@/components/therapy/ReflectiveCheckIn';
 import SpotifyIntegration from '@/components/therapy/SpotifyIntegration';
-import EnhancedTherapySidebar from '@/components/therapy/EnhancedTherapySidebar';
+import TherapySidebar from '@/components/therapy/TherapySidebar';
+import ModeSelectionModal from '@/components/therapy/ModeSelectionModal';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTherapySessions, TherapyMode, TherapySession } from '@/hooks/useTherapySessions';
-import { useAIChat } from '@/hooks/useAIChat';
 import { Button } from '@/components/ui/button';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 
 interface Message {
   id: string;
@@ -25,8 +25,8 @@ const Therapy = () => {
   const [messageCount, setMessageCount] = useState(0);
   const [showReflectiveCheckIn, setShowReflectiveCheckIn] = useState(true);
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [showModeSelection, setShowModeSelection] = useState(false);
   const [uiMessages, setUiMessages] = useState<Message[]>([]);
-  const [showLimitModal, setShowLimitModal] = useState(false);
 
   const {
     currentSession,
@@ -37,8 +37,6 @@ const Therapy = () => {
     addMessage
   } = useTherapySessions();
 
-  const { sendMessage: sendAIMessage, isLoading: aiLoading } = useAIChat();
-
   // Convert database messages to UI messages
   useEffect(() => {
     const convertedMessages: Message[] = messages.map(msg => ({
@@ -48,10 +46,6 @@ const Therapy = () => {
       timestamp: new Date(msg.timestamp)
     }));
     setUiMessages(convertedMessages);
-    
-    // Count user messages for limit tracking
-    const userMessageCount = messages.filter(msg => msg.sender === 'user').length;
-    setMessageCount(userMessageCount);
   }, [messages]);
 
   const modeToBackgroundImage = {
@@ -71,7 +65,11 @@ const Therapy = () => {
     return prompts[mode];
   };
 
-  const handleNewSession = async (title: string, mode: TherapyMode) => {
+  const handleNewSession = () => {
+    setShowModeSelection(true);
+  };
+
+  const handleModeSelect = async (mode: TherapyMode, title: string) => {
     const session = await createNewSession(title, mode);
     if (session) {
       const welcomeMessage = getModePrompts(mode);
@@ -87,25 +85,18 @@ const Therapy = () => {
     if (!inputText.trim() || !currentSession) return;
     
     const maxMessages = isPremium ? 300 : 50;
-    if (messageCount >= maxMessages) {
-      setShowLimitModal(true);
-      return;
-    }
-
-    const userMessage = inputText.trim();
-    setInputText('');
+    if (messageCount >= maxMessages) return;
 
     // Add user message
-    await addMessage(userMessage, 'user');
+    await addMessage(inputText, 'user');
+    setInputText('');
     setMessageCount(prev => prev + 1);
 
-    // Get AI response
-    if (currentSession) {
-      const aiResponse = await sendAIMessage(userMessage, currentSession.id);
-      if (aiResponse) {
-        await addMessage(aiResponse, 'ai');
-      }
-    }
+    // Simulate AI response
+    setTimeout(async () => {
+      const aiResponse = "I hear you, and I want you to know that your feelings are completely valid. Let's explore this together. Can you tell me more about what led to these feelings?";
+      await addMessage(aiResponse, 'ai');
+    }, 1500);
   };
 
   const currentMode = currentSession?.mode || 'Reflect';
@@ -125,8 +116,8 @@ const Therapy = () => {
       />
       <div className="absolute inset-0 bg-black/50 z-[-5]" />
 
-      {/* Enhanced Sidebar */}
-      <EnhancedTherapySidebar
+      {/* Sidebar */}
+      <TherapySidebar
         onSessionSelect={handleSessionSelect}
         onNewSession={handleNewSession}
         currentSessionId={currentSession?.id}
@@ -174,10 +165,10 @@ const Therapy = () => {
             <div className="mb-6 glass-effect border border-white/30 rounded-lg p-4 backdrop-blur-md">
               <div className="flex items-center space-x-3">
                 <div className="text-2xl">
-                  {currentSession.mode === 'Reflect' && '🧠'}
-                  {currentSession.mode === 'Recover' && '🛠'}
-                  {currentSession.mode === 'Rebuild' && '🌱'}
-                  {currentSession.mode === 'Evolve' && '⚡'}
+                  {currentSession.mode === 'Reflect' && '🟣'}
+                  {currentSession.mode === 'Recover' && '🔵'}
+                  {currentSession.mode === 'Rebuild' && '🟢'}
+                  {currentSession.mode === 'Evolve' && '🟡'}
                 </div>
                 <div>
                   <h2 className="text-xl font-semibold text-white">{currentSession.title}</h2>
@@ -227,22 +218,6 @@ const Therapy = () => {
                   </div>
                 ))
               )}
-              
-              {/* AI Typing Indicator */}
-              {aiLoading && (
-                <div className="flex justify-start">
-                  <div className="bg-white/20 text-white border border-white/30 max-w-sm p-3 rounded-lg backdrop-blur-sm">
-                    <div className="flex items-center space-x-2">
-                      <div className="flex space-x-1">
-                        <div className="w-2 h-2 bg-white/60 rounded-full animate-pulse"></div>
-                        <div className="w-2 h-2 bg-white/60 rounded-full animate-pulse" style={{ animationDelay: '0.2s' }}></div>
-                        <div className="w-2 h-2 bg-white/60 rounded-full animate-pulse" style={{ animationDelay: '0.4s' }}></div>
-                      </div>
-                      <span className="text-sm text-white/70">Echo is reflecting...</span>
-                    </div>
-                  </div>
-                </div>
-              )}
             </div>
 
             {/* Chat Input */}
@@ -252,7 +227,7 @@ const Therapy = () => {
                   inputText={inputText}
                   setInputText={setInputText}
                   onSendMessage={handleSendMessage}
-                  disabled={!currentSession || aiLoading}
+                  disabled={!currentSession}
                   messageCount={messageCount}
                 />
               </div>
@@ -274,44 +249,12 @@ const Therapy = () => {
         </div>
       </div>
 
-      {/* Message Limit Modal */}
-      <Dialog open={showLimitModal} onOpenChange={setShowLimitModal}>
-        <DialogContent className="bg-black/90 backdrop-blur-md border border-white/20 text-white max-w-md">
-          <DialogHeader>
-            <DialogTitle className="text-xl font-semibold text-white mb-4">Daily Message Limit Reached</DialogTitle>
-          </DialogHeader>
-          
-          <div className="space-y-4">
-            <p className="text-white/80">
-              You've reached today's limit of 50 messages. Upgrade to Premium for deeper insights, memory, and unlimited conversations.
-            </p>
-            
-            <div className="flex flex-col space-y-3">
-              <Button
-                onClick={() => {
-                  setShowLimitModal(false);
-                  // Navigate to upgrade page or show upgrade modal
-                }}
-                className="bg-gradient-to-r from-primary to-purple-600 w-full"
-              >
-                Upgrade to Premium
-              </Button>
-              
-              <Button
-                variant="outline"
-                onClick={() => {
-                  setShowLimitModal(false);
-                  // Create new session
-                  handleNewSession(`New Session ${Date.now()}`, 'Reflect');
-                }}
-                className="border-white/30 text-white hover:bg-white/10 w-full"
-              >
-                Start New Therapy Session
-              </Button>
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
+      {/* Mode Selection Modal */}
+      <ModeSelectionModal
+        isOpen={showModeSelection}
+        onClose={() => setShowModeSelection(false)}
+        onSelect={handleModeSelect}
+      />
     </div>
   );
 };
