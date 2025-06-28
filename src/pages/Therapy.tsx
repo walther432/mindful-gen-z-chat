@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import Navigation from '@/components/ui/navigation';
 import ChatInput from '@/components/therapy/ChatInput';
@@ -7,6 +6,7 @@ import SpotifyIntegration from '@/components/therapy/SpotifyIntegration';
 import TherapySidebar from '@/components/therapy/TherapySidebar';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTherapySessions, TherapySession } from '@/hooks/useTherapySessions';
+import { supabase } from '@/integrations/supabase/client';
 
 type TherapyMode = 'reflect' | 'recover' | 'rebuild' | 'evolve';
 
@@ -26,7 +26,6 @@ const Therapy = () => {
     setCurrentSession, 
     createSession, 
     updateSession,
-    addMessageToSession,
     generateSessionTitle 
   } = useTherapySessions();
   
@@ -85,12 +84,38 @@ const Therapy = () => {
   // Load messages from current session
   useEffect(() => {
     if (currentSession) {
-      setMessages(currentSession.messages || []);
+      loadMessagesForSession(currentSession.id);
       setSelectedMode(currentSession.mode.toLowerCase() as TherapyMode);
     } else {
       setMessages([]);
     }
   }, [currentSession]);
+
+  const loadMessagesForSession = async (sessionId: string) => {
+    try {
+      const { data, error } = await supabase
+        .from('therapy_messages')
+        .select('*')
+        .eq('session_id', sessionId)
+        .order('timestamp', { ascending: true });
+
+      if (error) {
+        console.error('Error loading messages:', error);
+        return;
+      }
+
+      const formattedMessages: Message[] = (data || []).map(msg => ({
+        id: msg.id,
+        text: msg.content,
+        isUser: msg.sender === 'user',
+        timestamp: new Date(msg.timestamp)
+      }));
+
+      setMessages(formattedMessages);
+    } catch (error) {
+      console.error('Error loading messages:', error);
+    }
+  };
 
   const getModePrompts = (mode: TherapyMode): string => {
     const prompts = {
@@ -120,7 +145,7 @@ const Therapy = () => {
           timestamp: new Date()
         };
         setMessages([welcomeMessage]);
-        await addMessageToSession(newSession.id, welcomeMessage);
+        await saveMessageToDatabase(newSession.id, welcomeMessage);
       }
     } else {
       // Update existing session mode
@@ -133,7 +158,27 @@ const Therapy = () => {
         timestamp: new Date()
       };
       setMessages([welcomeMessage]);
-      await addMessageToSession(currentSession.id, welcomeMessage);
+      await saveMessageToDatabase(currentSession.id, welcomeMessage);
+    }
+  };
+
+  const saveMessageToDatabase = async (sessionId: string, message: Message) => {
+    try {
+      const { error } = await supabase
+        .from('therapy_messages')
+        .insert({
+          session_id: sessionId,
+          user_id: (await supabase.auth.getUser()).data.user?.id,
+          content: message.text,
+          sender: message.isUser ? 'user' : 'ai',
+          timestamp: message.timestamp.toISOString()
+        });
+
+      if (error) {
+        console.error('Error saving message:', error);
+      }
+    } catch (error) {
+      console.error('Error saving message:', error);
     }
   };
 
@@ -161,13 +206,13 @@ const Therapy = () => {
     setInputText('');
     setMessageCount(prev => prev + 1);
 
-    // Add message to current session
+    // Save message to database
     if (currentSession) {
-      await addMessageToSession(currentSession.id, userMessage);
+      await saveMessageToDatabase(currentSession.id, userMessage);
       
       // Auto-generate title if this is the first user message
       if (messages.length <= 1) {
-        const newTitle = generateSessionTitle([userMessage]);
+        const newTitle = generateSessionTitle(inputText);
         await updateSession(currentSession.id, { title: newTitle });
       }
     }
@@ -185,7 +230,7 @@ const Therapy = () => {
       setMessages(updatedMessages);
       
       if (currentSession) {
-        await addMessageToSession(currentSession.id, aiResponse);
+        await saveMessageToDatabase(currentSession.id, aiResponse);
       }
     }, 1500);
   };
