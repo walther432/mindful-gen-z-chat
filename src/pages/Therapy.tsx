@@ -6,7 +6,9 @@ import SpotifyIntegration from '@/components/therapy/SpotifyIntegration';
 import TherapySidebar from '@/components/therapy/TherapySidebar';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTherapySessions, TherapySession } from '@/hooks/useTherapySessions';
+import { useEmotionClassifier } from '@/hooks/useEmotionClassifier';
 import { supabase } from '@/integrations/supabase/client';
+import { toast } from 'sonner';
 
 type TherapyMode = 'reflect' | 'recover' | 'rebuild' | 'evolve';
 
@@ -20,6 +22,7 @@ interface Message {
 
 const Therapy = () => {
   const { isPremium } = useAuth();
+  const { classifyEmotion } = useEmotionClassifier();
   const { 
     sessions, 
     currentSession, 
@@ -34,6 +37,7 @@ const Therapy = () => {
   const [inputText, setInputText] = useState('');
   const [messageCount, setMessageCount] = useState(0);
   const [showReflectiveCheckIn, setShowReflectiveCheckIn] = useState(true);
+  const [isClassifying, setIsClassifying] = useState(false);
 
   const modes = [
     {
@@ -188,6 +192,8 @@ const Therapy = () => {
     const maxMessages = isPremium ? 300 : 50;
     if (messageCount >= maxMessages) return;
 
+    const userInput = inputText.trim();
+
     // Create session if none exists
     if (!currentSession) {
       const newSession = await createSession('Reflect', 'New Session');
@@ -196,7 +202,7 @@ const Therapy = () => {
 
     const userMessage: Message = {
       id: Date.now().toString(),
-      text: inputText,
+      text: userInput,
       isUser: true,
       timestamp: new Date()
     };
@@ -212,9 +218,28 @@ const Therapy = () => {
       
       // Auto-generate title if this is the first user message
       if (messages.length <= 1) {
-        const newTitle = generateSessionTitle(inputText);
+        const newTitle = generateSessionTitle(userInput);
         await updateSession(currentSession.id, { title: newTitle });
       }
+    }
+
+    // Classify emotion and update mode
+    setIsClassifying(true);
+    try {
+      const detectedMode = await classifyEmotion(userInput);
+      const newMode = detectedMode.toLowerCase() as TherapyMode;
+      
+      if (newMode !== selectedMode) {
+        setSelectedMode(newMode);
+        if (currentSession) {
+          await updateSession(currentSession.id, { mode: detectedMode });
+        }
+        toast.success(`Switched to ${detectedMode} mode based on your message`);
+      }
+    } catch (error) {
+      console.error('Error classifying emotion:', error);
+    } finally {
+      setIsClassifying(false);
     }
 
     // Simulate AI response
@@ -284,9 +309,17 @@ const Therapy = () => {
 
           {/* Mode Selector */}
           <div className="mb-8">
-            <h1 className="text-2xl font-bold text-white mb-6">
-              {currentSession ? `Therapy Session: ${currentSession.title}` : 'Choose your therapy mode'}
-            </h1>
+            <div className="flex items-center justify-between mb-6">
+              <h1 className="text-2xl font-bold text-white">
+                {currentSession ? `Therapy Session: ${currentSession.title}` : 'Choose your therapy mode'}
+              </h1>
+              {isClassifying && (
+                <div className="flex items-center space-x-2 text-white/80">
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                  <span className="text-sm">Detecting emotional mode...</span>
+                </div>
+              )}
+            </div>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
               {modes.map((mode) => (
                 <button
