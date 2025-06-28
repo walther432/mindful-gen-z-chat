@@ -1,9 +1,12 @@
-import { useState } from 'react';
+
+import { useState, useEffect } from 'react';
 import Navigation from '@/components/ui/navigation';
 import ChatInput from '@/components/therapy/ChatInput';
 import ReflectiveCheckIn from '@/components/therapy/ReflectiveCheckIn';
 import SpotifyIntegration from '@/components/therapy/SpotifyIntegration';
+import TherapySidebar from '@/components/therapy/TherapySidebar';
 import { useAuth } from '@/contexts/AuthContext';
+import { useTherapySessions, TherapySession } from '@/hooks/useTherapySessions';
 
 type TherapyMode = 'reflect' | 'recover' | 'rebuild' | 'evolve';
 
@@ -17,6 +20,16 @@ interface Message {
 
 const Therapy = () => {
   const { isPremium } = useAuth();
+  const { 
+    sessions, 
+    currentSession, 
+    setCurrentSession, 
+    createSession, 
+    updateSession,
+    addMessageToSession,
+    generateSessionTitle 
+  } = useTherapySessions();
+  
   const [selectedMode, setSelectedMode] = useState<TherapyMode>('reflect');
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputText, setInputText] = useState('');
@@ -69,6 +82,16 @@ const Therapy = () => {
     evolve: '/lovable-uploads/63bfd61c-32c7-4ddb-aa9a-6c5a6d885cc6.png'
   };
 
+  // Load messages from current session
+  useEffect(() => {
+    if (currentSession) {
+      setMessages(currentSession.messages || []);
+      setSelectedMode(currentSession.mode.toLowerCase() as TherapyMode);
+    } else {
+      setMessages([]);
+    }
+  }, [currentSession]);
+
   const getModePrompts = (mode: TherapyMode): string => {
     const prompts = {
       reflect: "I'm here to help you reflect on your thoughts and feelings. What's been on your mind lately?",
@@ -79,23 +102,52 @@ const Therapy = () => {
     return prompts[mode];
   };
 
-  const handleModeSelect = (mode: TherapyMode) => {
-    setSelectedMode(mode);
-    const welcomeMessage: Message = {
-      id: Date.now().toString(),
-      text: getModePrompts(mode),
-      isUser: false,
-      timestamp: new Date()
-    };
-    setMessages([welcomeMessage]);
+  const handleSessionSelect = (session: TherapySession) => {
+    setCurrentSession(session);
   };
 
-  const handleSendMessage = () => {
+  const handleModeSelect = async (mode: TherapyMode) => {
+    setSelectedMode(mode);
+    
+    if (!currentSession) {
+      // Create new session if none exists
+      const newSession = await createSession(mode.charAt(0).toUpperCase() + mode.slice(1), 'New Session');
+      if (newSession) {
+        const welcomeMessage: Message = {
+          id: Date.now().toString(),
+          text: getModePrompts(mode),
+          isUser: false,
+          timestamp: new Date()
+        };
+        setMessages([welcomeMessage]);
+        await addMessageToSession(newSession.id, welcomeMessage);
+      }
+    } else {
+      // Update existing session mode
+      await updateSession(currentSession.id, { mode: mode.charAt(0).toUpperCase() + mode.slice(1) });
+      
+      const welcomeMessage: Message = {
+        id: Date.now().toString(),
+        text: getModePrompts(mode),
+        isUser: false,
+        timestamp: new Date()
+      };
+      setMessages([welcomeMessage]);
+      await addMessageToSession(currentSession.id, welcomeMessage);
+    }
+  };
+
+  const handleSendMessage = async () => {
     if (!inputText.trim()) return;
     
-    // Updated message limits for premium users
     const maxMessages = isPremium ? 300 : 50;
     if (messageCount >= maxMessages) return;
+
+    // Create session if none exists
+    if (!currentSession) {
+      const newSession = await createSession('Reflect', 'New Session');
+      if (!newSession) return;
+    }
 
     const userMessage: Message = {
       id: Date.now().toString(),
@@ -104,18 +156,37 @@ const Therapy = () => {
       timestamp: new Date()
     };
 
-    setMessages(prev => [...prev, userMessage]);
+    const newMessages = [...messages, userMessage];
+    setMessages(newMessages);
     setInputText('');
     setMessageCount(prev => prev + 1);
 
-    setTimeout(() => {
+    // Add message to current session
+    if (currentSession) {
+      await addMessageToSession(currentSession.id, userMessage);
+      
+      // Auto-generate title if this is the first user message
+      if (messages.length <= 1) {
+        const newTitle = generateSessionTitle([userMessage]);
+        await updateSession(currentSession.id, { title: newTitle });
+      }
+    }
+
+    // Simulate AI response
+    setTimeout(async () => {
       const aiResponse: Message = {
         id: (Date.now() + 1).toString(),
         text: "I hear you, and I want you to know that your feelings are completely valid. Let's explore this together. Can you tell me more about what led to these feelings?",
         isUser: false,
         timestamp: new Date()
       };
-      setMessages(prev => [...prev, aiResponse]);
+      
+      const updatedMessages = [...newMessages, aiResponse];
+      setMessages(updatedMessages);
+      
+      if (currentSession) {
+        await addMessageToSession(currentSession.id, aiResponse);
+      }
     }, 1500);
   };
 
@@ -123,139 +194,150 @@ const Therapy = () => {
 
   return (
     <div className="min-h-screen relative overflow-hidden">
-      {/* Full-screen background image with smooth transitions */}
-      <div 
-        className="absolute inset-0 w-full h-full z-[-10] transition-all duration-500"
-        style={{
-          backgroundImage: `url('${modeToBackgroundImage[selectedMode]}')`,
-          backgroundSize: 'cover',
-          backgroundPosition: 'center',
-          backgroundRepeat: 'no-repeat'
-        }}
+      {/* Sidebar */}
+      <TherapySidebar 
+        onSessionSelect={handleSessionSelect}
+        currentSessionId={currentSession?.id}
       />
       
-      {/* Dark overlay for readability */}
-      <div className="absolute inset-0 bg-black/50 z-[-5]" />
-      
-      <Navigation />
-      
-      {/* Reflective Check-In Panel for Premium Users */}
-      {isPremium && showReflectiveCheckIn && (
-        <ReflectiveCheckIn onClose={() => setShowReflectiveCheckIn(false)} />
-      )}
-      
-      <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8 relative">
-        {/* Premium Status Banner */}
-        {isPremium && (
-          <div className="mb-6 glass-effect border border-yellow-500/30 rounded-lg p-4">
-            <div className="flex items-center space-x-2">
-              <span className="bg-gradient-to-r from-yellow-400 to-orange-500 text-black text-sm px-3 py-1 rounded-full font-semibold">
-                PRO
-              </span>
-              <span className="text-white font-medium">Premium Active</span>
-              <span className="text-white/80">- 300 messages & 25 uploads per day</span>
-            </div>
-          </div>
+      {/* Main Content with left margin for sidebar */}
+      <div className="ml-12 transition-all duration-300">
+        {/* Full-screen background image with smooth transitions */}
+        <div 
+          className="absolute inset-0 w-full h-full z-[-10] transition-all duration-500"
+          style={{
+            backgroundImage: `url('${modeToBackgroundImage[selectedMode]}')`,
+            backgroundSize: 'cover',
+            backgroundPosition: 'center',
+            backgroundRepeat: 'no-repeat'
+          }}
+        />
+        
+        {/* Dark overlay for readability */}
+        <div className="absolute inset-0 bg-black/50 z-[-5]" />
+        
+        <Navigation />
+        
+        {/* Reflective Check-In Panel for Premium Users */}
+        {isPremium && showReflectiveCheckIn && (
+          <ReflectiveCheckIn onClose={() => setShowReflectiveCheckIn(false)} />
         )}
-
-        {/* Mode Selector */}
-        <div className="mb-8">
-          <h1 className="text-2xl font-bold text-white mb-6">Choose your therapy mode</h1>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            {modes.map((mode) => (
-              <button
-                key={mode.id}
-                onClick={() => handleModeSelect(mode.id)}
-                className={`p-4 rounded-lg border transition-all duration-300 backdrop-blur-sm ${
-                  selectedMode === mode.id
-                    ? `${mode.borderColor} ${mode.bgColor} shadow-lg border-opacity-80`
-                    : 'border-white/30 hover:border-white/50 glass-effect'
-                }`}
-              >
-                <div className="text-2xl mb-2">{mode.icon}</div>
-                <div className="font-semibold text-white">{mode.name}</div>
-                <div className="text-xs text-white/80 mt-1">{mode.description}</div>
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {/* Selected Mode Banner */}
-        {selectedModeData && (
-          <div className={`p-4 rounded-lg border backdrop-blur-sm ${selectedModeData.borderColor} ${selectedModeData.bgColor} mb-6 border-opacity-60`}>
-            <div className="flex items-center space-x-3">
-              <span className="text-2xl">{selectedModeData.icon}</span>
-              <div>
-                <h3 className="font-semibold text-white">{selectedModeData.name} Mode</h3>
-                <p className="text-sm text-white/80">{selectedModeData.description}</p>
+        
+        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8 relative">
+          {/* Premium Status Banner */}
+          {isPremium && (
+            <div className="mb-6 glass-effect border border-yellow-500/30 rounded-lg p-4">
+              <div className="flex items-center space-x-2">
+                <span className="bg-gradient-to-r from-yellow-400 to-orange-500 text-black text-sm px-3 py-1 rounded-full font-semibold">
+                  PRO
+                </span>
+                <span className="text-white font-medium">Premium Active</span>
+                <span className="text-white/80">- 300 messages & 25 uploads per day</span>
               </div>
             </div>
-          </div>
-        )}
+          )}
 
-        {/* Chat Area */}
-        <div className="glass-effect rounded-lg border border-white/30 p-6 mb-6 backdrop-blur-md">
-          <div className="h-96 overflow-y-auto mb-6 space-y-4">
-            {messages.length === 0 ? (
-              <div className="text-center text-white/70">
-                <p>Select a therapy mode above to begin your session</p>
-              </div>
-            ) : (
-              messages.map((message) => (
-                <div
-                  key={message.id}
-                  className={`flex ${message.isUser ? 'justify-end' : 'justify-start'}`}
+          {/* Mode Selector */}
+          <div className="mb-8">
+            <h1 className="text-2xl font-bold text-white mb-6">
+              {currentSession ? `Therapy Session: ${currentSession.title}` : 'Choose your therapy mode'}
+            </h1>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              {modes.map((mode) => (
+                <button
+                  key={mode.id}
+                  onClick={() => handleModeSelect(mode.id)}
+                  className={`p-4 rounded-lg border transition-all duration-300 backdrop-blur-sm ${
+                    selectedMode === mode.id
+                      ? `${mode.borderColor} ${mode.bgColor} shadow-lg border-opacity-80`
+                      : 'border-white/30 hover:border-white/50 glass-effect'
+                  }`}
                 >
-                  <div
-                    className={`max-w-sm p-3 rounded-lg backdrop-blur-sm ${
-                      message.isUser
-                        ? 'bg-primary/80 text-white'
-                        : 'bg-white/20 text-white border border-white/30'
-                    }`}
-                  >
-                    <p>{message.text}</p>
-                    {message.images && message.images.length > 0 && (
-                      <div className="mt-2 space-y-1">
-                        {message.images.map((img, idx) => (
-                          <img key={idx} src={img} alt="Upload" className="max-w-full rounded" />
-                        ))}
-                      </div>
-                    )}
-                    <p className={`text-xs mt-1 ${
-                      message.isUser ? 'text-white/70' : 'text-white/60'
-                    }`}>
-                      {message.timestamp.toLocaleTimeString()}
-                    </p>
-                  </div>
-                </div>
-              ))
-            )}
-          </div>
-
-          {/* Chat Input with Spotify Integration */}
-          <div className="flex items-center space-x-3">
-            <div className="flex-1">
-              <ChatInput
-                inputText={inputText}
-                setInputText={setInputText}
-                onSendMessage={handleSendMessage}
-                disabled={messages.length === 0}
-                messageCount={messageCount}
-              />
+                  <div className="text-2xl mb-2">{mode.icon}</div>
+                  <div className="font-semibold text-white">{mode.name}</div>
+                  <div className="text-xs text-white/80 mt-1">{mode.description}</div>
+                </button>
+              ))}
             </div>
-            <SpotifyIntegration mode={selectedMode} />
           </div>
-        </div>
 
-        {/* Tips Section */}
-        <div className="glass-effect rounded-lg border border-white/30 p-6 backdrop-blur-md">
-          <h3 className="font-semibold text-white mb-4">Tips for your session</h3>
-          <div className="space-y-2 text-green-300">
-            <p>• Be honest about your feelings – there's no judgment here.</p>
-            <p>• Take your time to reflect before responding.</p>
-            <p>• Switch modes based on what you need most right now.</p>
-            <p>• Upload images to share visual context with your AI therapist.</p>
-            <p>• Remember: This is a safe space for your thoughts.</p>
+          {/* Selected Mode Banner */}
+          {selectedModeData && (
+            <div className={`p-4 rounded-lg border backdrop-blur-sm ${selectedModeData.borderColor} ${selectedModeData.bgColor} mb-6 border-opacity-60`}>
+              <div className="flex items-center space-x-3">
+                <span className="text-2xl">{selectedModeData.icon}</span>
+                <div>
+                  <h3 className="font-semibold text-white">{selectedModeData.name} Mode</h3>
+                  <p className="text-sm text-white/80">{selectedModeData.description}</p>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Chat Area */}
+          <div className="glass-effect rounded-lg border border-white/30 p-6 mb-6 backdrop-blur-md">
+            <div className="h-96 overflow-y-auto mb-6 space-y-4">
+              {messages.length === 0 ? (
+                <div className="text-center text-white/70">
+                  <p>Select a therapy mode above to begin your session</p>
+                </div>
+              ) : (
+                messages.map((message) => (
+                  <div
+                    key={message.id}
+                    className={`flex ${message.isUser ? 'justify-end' : 'justify-start'}`}
+                  >
+                    <div
+                      className={`max-w-sm p-3 rounded-lg backdrop-blur-sm ${
+                        message.isUser
+                          ? 'bg-primary/80 text-white'
+                          : 'bg-white/20 text-white border border-white/30'
+                      }`}
+                    >
+                      <p>{message.text}</p>
+                      {message.images && message.images.length > 0 && (
+                        <div className="mt-2 space-y-1">
+                          {message.images.map((img, idx) => (
+                            <img key={idx} src={img} alt="Upload" className="max-w-full rounded" />
+                          ))}
+                        </div>
+                      )}
+                      <p className={`text-xs mt-1 ${
+                        message.isUser ? 'text-white/70' : 'text-white/60'
+                      }`}>
+                        {message.timestamp.toLocaleTimeString()}
+                      </p>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+
+            {/* Chat Input with Spotify Integration */}
+            <div className="flex items-center space-x-3">
+              <div className="flex-1">
+                <ChatInput
+                  inputText={inputText}
+                  setInputText={setInputText}
+                  onSendMessage={handleSendMessage}
+                  disabled={false}
+                  messageCount={messageCount}
+                />
+              </div>
+              <SpotifyIntegration mode={selectedMode} />
+            </div>
+          </div>
+
+          {/* Tips Section */}
+          <div className="glass-effect rounded-lg border border-white/30 p-6 backdrop-blur-md">
+            <h3 className="font-semibold text-white mb-4">Tips for your session</h3>
+            <div className="space-y-2 text-green-300">
+              <p>• Be honest about your feelings – there's no judgment here.</p>
+              <p>• Take your time to reflect before responding.</p>
+              <p>• Switch modes based on what you need most right now.</p>
+              <p>• Upload images to share visual context with your AI therapist.</p>
+              <p>• Remember: This is a safe space for your thoughts.</p>
+            </div>
           </div>
         </div>
       </div>
