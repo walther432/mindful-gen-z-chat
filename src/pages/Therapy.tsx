@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from 'react';
 import Navigation from '@/components/ui/navigation';
 import ChatInput from '@/components/therapy/ChatInput';
@@ -6,7 +7,6 @@ import SpotifyIntegration from '@/components/therapy/SpotifyIntegration';
 import TherapySidebar from '@/components/therapy/TherapySidebar';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTherapySessions, TherapySession } from '@/hooks/useTherapySessions';
-import { useEmotionClassifier } from '@/hooks/useEmotionClassifier';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 
@@ -22,7 +22,6 @@ interface Message {
 
 const Therapy = () => {
   const { isPremium } = useAuth();
-  const { classifyEmotion } = useEmotionClassifier();
   const { 
     sessions, 
     currentSession, 
@@ -37,7 +36,6 @@ const Therapy = () => {
   const [inputText, setInputText] = useState('');
   const [messageCount, setMessageCount] = useState(0);
   const [showReflectiveCheckIn, setShowReflectiveCheckIn] = useState(true);
-  const [isClassifying, setIsClassifying] = useState(false);
 
   const modes = [
     {
@@ -223,26 +221,7 @@ const Therapy = () => {
       }
     }
 
-    // Classify emotion and update mode
-    setIsClassifying(true);
-    try {
-      const detectedMode = await classifyEmotion(userInput);
-      const newMode = detectedMode.toLowerCase() as TherapyMode;
-      
-      if (newMode !== selectedMode) {
-        setSelectedMode(newMode);
-        if (currentSession) {
-          await updateSession(currentSession.id, { mode: detectedMode });
-        }
-        toast.success(`Switched to ${detectedMode} mode based on your message`);
-      }
-    } catch (error) {
-      console.error('Error classifying emotion:', error);
-    } finally {
-      setIsClassifying(false);
-    }
-
-    // Simulate AI response
+    // Simulate AI response (placeholder for future API integration)
     setTimeout(async () => {
       const aiResponse: Message = {
         id: (Date.now() + 1).toString(),
@@ -313,12 +292,6 @@ const Therapy = () => {
               <h1 className="text-2xl font-bold text-white">
                 {currentSession ? `Therapy Session: ${currentSession.title}` : 'Choose your therapy mode'}
               </h1>
-              {isClassifying && (
-                <div className="flex items-center space-x-2 text-white/80">
-                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                  <span className="text-sm">Detecting emotional mode...</span>
-                </div>
-              )}
             </div>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
               {modes.map((mode) => (
