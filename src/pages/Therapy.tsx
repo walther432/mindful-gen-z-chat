@@ -1,23 +1,43 @@
-
 import { useState, useEffect } from 'react';
 import Navigation from '@/components/ui/navigation';
+import ChatInput from '@/components/therapy/ChatInput';
+import ReflectiveCheckIn from '@/components/therapy/ReflectiveCheckIn';
+import SpotifyIntegration from '@/components/therapy/SpotifyIntegration';
 import TherapySidebar from '@/components/therapy/TherapySidebar';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTherapySessions, TherapySession } from '@/hooks/useTherapySessions';
+import { useEmotionClassifier } from '@/hooks/useEmotionClassifier';
+import { supabase } from '@/integrations/supabase/client';
+import { toast } from 'sonner';
 
 type TherapyMode = 'reflect' | 'recover' | 'rebuild' | 'evolve';
 
+interface Message {
+  id: string;
+  text: string;
+  isUser: boolean;
+  timestamp: Date;
+  images?: string[];
+}
+
 const Therapy = () => {
   const { isPremium } = useAuth();
+  const { classifyEmotion } = useEmotionClassifier();
   const { 
     sessions, 
     currentSession, 
     setCurrentSession, 
     createSession, 
-    updateSession
+    updateSession,
+    generateSessionTitle 
   } = useTherapySessions();
   
   const [selectedMode, setSelectedMode] = useState<TherapyMode>('reflect');
+  const [messages, setMessages] = useState<Message[]>([]);
+  const [inputText, setInputText] = useState('');
+  const [messageCount, setMessageCount] = useState(0);
+  const [showReflectiveCheckIn, setShowReflectiveCheckIn] = useState(true);
+  const [isClassifying, setIsClassifying] = useState(false);
 
   const modes = [
     {
@@ -65,12 +85,51 @@ const Therapy = () => {
     evolve: '/lovable-uploads/63bfd61c-32c7-4ddb-aa9a-6c5a6d885cc6.png'
   };
 
-  // Update mode when session changes
+  // Load messages from current session
   useEffect(() => {
     if (currentSession) {
+      loadMessagesForSession(currentSession.id);
       setSelectedMode(currentSession.mode.toLowerCase() as TherapyMode);
+    } else {
+      setMessages([]);
     }
   }, [currentSession]);
+
+  const loadMessagesForSession = async (sessionId: string) => {
+    try {
+      const { data, error } = await supabase
+        .from('therapy_messages')
+        .select('*')
+        .eq('session_id', sessionId)
+        .order('timestamp', { ascending: true });
+
+      if (error) {
+        console.error('Error loading messages:', error);
+        return;
+      }
+
+      const formattedMessages: Message[] = (data || []).map(msg => ({
+        id: msg.id,
+        text: msg.content,
+        isUser: msg.sender === 'user',
+        timestamp: new Date(msg.timestamp)
+      }));
+
+      setMessages(formattedMessages);
+    } catch (error) {
+      console.error('Error loading messages:', error);
+    }
+  };
+
+  const getModePrompts = (mode: TherapyMode): string => {
+    const prompts = {
+      reflect: "I'm here to help you reflect on your thoughts and feelings. What's been on your mind lately?",
+      recover: "Let's work together on your healing journey. What would you like to process today?",
+      rebuild: "I'm here to support you as you rebuild and rediscover yourself. Where shall we start?",
+      evolve: "Ready to grow and evolve? Let's explore what's possible for you. What area of your life are you looking to transform?"
+    };
+    return prompts[mode];
+  };
 
   const handleSessionSelect = (session: TherapySession) => {
     setCurrentSession(session);
@@ -81,11 +140,124 @@ const Therapy = () => {
     
     if (!currentSession) {
       // Create new session if none exists
-      await createSession(mode.charAt(0).toUpperCase() + mode.slice(1), 'New Session');
+      const newSession = await createSession(mode.charAt(0).toUpperCase() + mode.slice(1), 'New Session');
+      if (newSession) {
+        const welcomeMessage: Message = {
+          id: Date.now().toString(),
+          text: getModePrompts(mode),
+          isUser: false,
+          timestamp: new Date()
+        };
+        setMessages([welcomeMessage]);
+        await saveMessageToDatabase(newSession.id, welcomeMessage);
+      }
     } else {
       // Update existing session mode
       await updateSession(currentSession.id, { mode: mode.charAt(0).toUpperCase() + mode.slice(1) });
+      
+      const welcomeMessage: Message = {
+        id: Date.now().toString(),
+        text: getModePrompts(mode),
+        isUser: false,
+        timestamp: new Date()
+      };
+      setMessages([welcomeMessage]);
+      await saveMessageToDatabase(currentSession.id, welcomeMessage);
     }
+  };
+
+  const saveMessageToDatabase = async (sessionId: string, message: Message) => {
+    try {
+      const { error } = await supabase
+        .from('therapy_messages')
+        .insert({
+          session_id: sessionId,
+          user_id: (await supabase.auth.getUser()).data.user?.id,
+          content: message.text,
+          sender: message.isUser ? 'user' : 'ai',
+          timestamp: message.timestamp.toISOString()
+        });
+
+      if (error) {
+        console.error('Error saving message:', error);
+      }
+    } catch (error) {
+      console.error('Error saving message:', error);
+    }
+  };
+
+  const handleSendMessage = async () => {
+    if (!inputText.trim()) return;
+    
+    const maxMessages = isPremium ? 300 : 50;
+    if (messageCount >= maxMessages) return;
+
+    const userInput = inputText.trim();
+
+    // Create session if none exists
+    if (!currentSession) {
+      const newSession = await createSession('Reflect', 'New Session');
+      if (!newSession) return;
+    }
+
+    const userMessage: Message = {
+      id: Date.now().toString(),
+      text: userInput,
+      isUser: true,
+      timestamp: new Date()
+    };
+
+    const newMessages = [...messages, userMessage];
+    setMessages(newMessages);
+    setInputText('');
+    setMessageCount(prev => prev + 1);
+
+    // Save message to database
+    if (currentSession) {
+      await saveMessageToDatabase(currentSession.id, userMessage);
+      
+      // Auto-generate title if this is the first user message
+      if (messages.length <= 1) {
+        const newTitle = generateSessionTitle(userInput);
+        await updateSession(currentSession.id, { title: newTitle });
+      }
+    }
+
+    // Classify emotion and update mode
+    setIsClassifying(true);
+    try {
+      const detectedMode = await classifyEmotion(userInput);
+      const newMode = detectedMode.toLowerCase() as TherapyMode;
+      
+      if (newMode !== selectedMode) {
+        setSelectedMode(newMode);
+        if (currentSession) {
+          await updateSession(currentSession.id, { mode: detectedMode });
+        }
+        toast.success(`Switched to ${detectedMode} mode based on your message`);
+      }
+    } catch (error) {
+      console.error('Error classifying emotion:', error);
+    } finally {
+      setIsClassifying(false);
+    }
+
+    // Simulate AI response
+    setTimeout(async () => {
+      const aiResponse: Message = {
+        id: (Date.now() + 1).toString(),
+        text: "I hear you, and I want you to know that your feelings are completely valid. Let's explore this together. Can you tell me more about what led to these feelings?",
+        isUser: false,
+        timestamp: new Date()
+      };
+      
+      const updatedMessages = [...newMessages, aiResponse];
+      setMessages(updatedMessages);
+      
+      if (currentSession) {
+        await saveMessageToDatabase(currentSession.id, aiResponse);
+      }
+    }, 1500);
   };
 
   const selectedModeData = modes.find(mode => mode.id === selectedMode);
@@ -116,6 +288,11 @@ const Therapy = () => {
         
         <Navigation />
         
+        {/* Reflective Check-In Panel for Premium Users */}
+        {isPremium && showReflectiveCheckIn && (
+          <ReflectiveCheckIn onClose={() => setShowReflectiveCheckIn(false)} />
+        )}
+        
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8 relative">
           {/* Premium Status Banner */}
           {isPremium && (
@@ -136,6 +313,12 @@ const Therapy = () => {
               <h1 className="text-2xl font-bold text-white">
                 {currentSession ? `Therapy Session: ${currentSession.title}` : 'Choose your therapy mode'}
               </h1>
+              {isClassifying && (
+                <div className="flex items-center space-x-2 text-white/80">
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                  <span className="text-sm">Detecting emotional mode...</span>
+                </div>
+              )}
             </div>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
               {modes.map((mode) => (
@@ -169,14 +352,57 @@ const Therapy = () => {
             </div>
           )}
 
-          {/* Empty Chat Area */}
+          {/* Chat Area */}
           <div className="glass-effect rounded-lg border border-white/30 p-6 mb-6 backdrop-blur-md">
-            <div className="h-96 flex items-center justify-center">
-              <div className="text-center text-white/70">
-                <div className="text-6xl mb-4">💭</div>
-                <h3 className="text-xl font-semibold mb-2">Start a session to begin your therapy journey</h3>
-                <p>Select a therapy mode above and create a new session to get started.</p>
+            <div className="h-96 overflow-y-auto mb-6 space-y-4">
+              {messages.length === 0 ? (
+                <div className="text-center text-white/70">
+                  <p>Select a therapy mode above to begin your session</p>
+                </div>
+              ) : (
+                messages.map((message) => (
+                  <div
+                    key={message.id}
+                    className={`flex ${message.isUser ? 'justify-end' : 'justify-start'}`}
+                  >
+                    <div
+                      className={`max-w-sm p-3 rounded-lg backdrop-blur-sm ${
+                        message.isUser
+                          ? 'bg-primary/80 text-white'
+                          : 'bg-white/20 text-white border border-white/30'
+                      }`}
+                    >
+                      <p>{message.text}</p>
+                      {message.images && message.images.length > 0 && (
+                        <div className="mt-2 space-y-1">
+                          {message.images.map((img, idx) => (
+                            <img key={idx} src={img} alt="Upload" className="max-w-full rounded" />
+                          ))}
+                        </div>
+                      )}
+                      <p className={`text-xs mt-1 ${
+                        message.isUser ? 'text-white/70' : 'text-white/60'
+                      }`}>
+                        {message.timestamp.toLocaleTimeString()}
+                      </p>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+
+            {/* Chat Input with Spotify Integration */}
+            <div className="flex items-center space-x-3">
+              <div className="flex-1">
+                <ChatInput
+                  inputText={inputText}
+                  setInputText={setInputText}
+                  onSendMessage={handleSendMessage}
+                  disabled={false}
+                  messageCount={messageCount}
+                />
               </div>
+              <SpotifyIntegration mode={selectedMode} />
             </div>
           </div>
 
@@ -187,6 +413,7 @@ const Therapy = () => {
               <p>• Be honest about your feelings – there's no judgment here.</p>
               <p>• Take your time to reflect before responding.</p>
               <p>• Switch modes based on what you need most right now.</p>
+              <p>• Upload images to share visual context with your AI therapist.</p>
               <p>• Remember: This is a safe space for your thoughts.</p>
             </div>
           </div>
