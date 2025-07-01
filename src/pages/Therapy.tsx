@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import Navigation from '@/components/ui/navigation';
 import ChatInput from '@/components/therapy/ChatInput';
@@ -9,6 +8,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useTherapySessions, TherapySession } from '@/hooks/useTherapySessions';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
+import { useIsMobile } from '@/hooks/use-mobile';
 
 type TherapyMode = 'reflect' | 'recover' | 'rebuild' | 'evolve';
 
@@ -22,6 +22,7 @@ interface Message {
 
 const Therapy = () => {
   const { isPremium } = useAuth();
+  const isMobile = useIsMobile();
   const { 
     sessions, 
     currentSession, 
@@ -137,7 +138,6 @@ const Therapy = () => {
     setSelectedMode(mode);
     
     if (!currentSession) {
-      // Create new session if none exists
       const newSession = await createSession(mode.charAt(0).toUpperCase() + mode.slice(1), 'New Session');
       if (newSession) {
         const welcomeMessage: Message = {
@@ -150,7 +150,6 @@ const Therapy = () => {
         await saveMessageToDatabase(newSession.id, welcomeMessage);
       }
     } else {
-      // Update existing session mode
       await updateSession(currentSession.id, { mode: mode.charAt(0).toUpperCase() + mode.slice(1) });
       
       const welcomeMessage: Message = {
@@ -192,7 +191,6 @@ const Therapy = () => {
 
     const userInput = inputText.trim();
 
-    // Create session if none exists
     if (!currentSession) {
       const newSession = await createSession('Reflect', 'New Session');
       if (!newSession) return;
@@ -210,18 +208,15 @@ const Therapy = () => {
     setInputText('');
     setMessageCount(prev => prev + 1);
 
-    // Save message to database
     if (currentSession) {
       await saveMessageToDatabase(currentSession.id, userMessage);
       
-      // Auto-generate title if this is the first user message
       if (messages.length <= 1) {
         const newTitle = generateSessionTitle(userInput);
         await updateSession(currentSession.id, { title: newTitle });
       }
     }
 
-    // Simulate AI response (placeholder for future API integration)
     setTimeout(async () => {
       const aiResponse: Message = {
         id: (Date.now() + 1).toString(),
@@ -243,38 +238,55 @@ const Therapy = () => {
 
   return (
     <div className="min-h-screen relative overflow-hidden">
-      {/* Sidebar */}
-      <TherapySidebar 
-        onSessionSelect={handleSessionSelect}
-        currentSessionId={currentSession?.id}
+      {/* Full-screen background image */}
+      <div 
+        className="absolute inset-0 w-full h-full z-[-10] transition-all duration-500"
+        style={{
+          backgroundImage: `url('${modeToBackgroundImage[selectedMode]}')`,
+          backgroundSize: 'cover',
+          backgroundPosition: 'center',
+          backgroundRepeat: 'no-repeat'
+        }}
       />
       
-      {/* Main Content with left margin for sidebar */}
-      <div className="ml-12 transition-all duration-300">
-        {/* Full-screen background image with smooth transitions */}
-        <div 
-          className="absolute inset-0 w-full h-full z-[-10] transition-all duration-500"
-          style={{
-            backgroundImage: `url('${modeToBackgroundImage[selectedMode]}')`,
-            backgroundSize: 'cover',
-            backgroundPosition: 'center',
-            backgroundRepeat: 'no-repeat'
-          }}
+      {/* Dark overlay for readability */}
+      <div className="absolute inset-0 bg-black/50 z-[-5]" />
+      
+      {/* Desktop Sidebar - Hidden on Mobile */}
+      <div className="hidden md:block">
+        <TherapySidebar 
+          onSessionSelect={handleSessionSelect}
+          currentSessionId={currentSession?.id}
         />
+      </div>
+      
+      {/* Main Content */}
+      <div className={`${isMobile ? '' : 'ml-12'} transition-all duration-300 min-h-screen flex flex-col`}>
+        {/* Navigation - Desktop only */}
+        <div className="hidden md:block">
+          <Navigation />
+        </div>
         
-        {/* Dark overlay for readability */}
-        <div className="absolute inset-0 bg-black/50 z-[-5]" />
+        {/* Mobile Navigation - Glassmorphism bottom bar */}
+        {isMobile && (
+          <div className="fixed top-0 left-0 right-0 z-50 glass-effect border-b border-white/20 backdrop-blur-xl bg-black/20 p-4">
+            <div className="flex items-center justify-between">
+              <h1 className="text-lg font-bold text-white">
+                {currentSession ? currentSession.title : 'Therapy'}
+              </h1>
+              <SpotifyIntegration mode={selectedMode} />
+            </div>
+          </div>
+        )}
         
-        <Navigation />
-        
-        {/* Reflective Check-In Panel for Premium Users */}
-        {isPremium && showReflectiveCheckIn && (
+        {/* Premium Check-In - Desktop only */}
+        {!isMobile && isPremium && showReflectiveCheckIn && (
           <ReflectiveCheckIn onClose={() => setShowReflectiveCheckIn(false)} />
         )}
         
-        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8 relative">
-          {/* Premium Status Banner */}
-          {isPremium && (
+        <div className={`flex-1 flex flex-col ${isMobile ? 'pt-20 pb-4' : 'max-w-4xl mx-auto'} px-4 sm:px-6 lg:px-8 py-8 relative`}>
+          {/* Premium Status Banner - Desktop only */}
+          {!isMobile && isPremium && (
             <div className="mb-6 glass-effect border border-yellow-500/30 rounded-lg p-4">
               <div className="flex items-center space-x-2">
                 <span className="bg-gradient-to-r from-yellow-400 to-orange-500 text-black text-sm px-3 py-1 rounded-full font-semibold">
@@ -287,33 +299,59 @@ const Therapy = () => {
           )}
 
           {/* Mode Selector */}
-          <div className="mb-8">
-            <div className="flex items-center justify-between mb-6">
-              <h1 className="text-2xl font-bold text-white">
-                {currentSession ? `Therapy Session: ${currentSession.title}` : 'Choose your therapy mode'}
-              </h1>
-            </div>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              {modes.map((mode) => (
-                <button
-                  key={mode.id}
-                  onClick={() => handleModeSelect(mode.id)}
-                  className={`p-4 rounded-lg border transition-all duration-300 backdrop-blur-sm ${
-                    selectedMode === mode.id
-                      ? `${mode.borderColor} ${mode.bgColor} shadow-lg border-opacity-80`
-                      : 'border-white/30 hover:border-white/50 glass-effect'
-                  }`}
-                >
-                  <div className="text-2xl mb-2">{mode.icon}</div>
-                  <div className="font-semibold text-white">{mode.name}</div>
-                  <div className="text-xs text-white/80 mt-1">{mode.description}</div>
-                </button>
-              ))}
-            </div>
+          <div className={`${isMobile ? 'mb-4' : 'mb-8'}`}>
+            {!isMobile && (
+              <div className="flex items-center justify-between mb-6">
+                <h1 className="text-2xl font-bold text-white">
+                  {currentSession ? `Therapy Session: ${currentSession.title}` : 'Choose your therapy mode'}
+                </h1>
+              </div>
+            )}
+            
+            {/* Mobile Mode Tabs */}
+            {isMobile ? (
+              <div className="overflow-x-auto">
+                <div className="flex space-x-3 pb-2 min-w-max px-1">
+                  {modes.map((mode) => (
+                    <button
+                      key={mode.id}
+                      onClick={() => handleModeSelect(mode.id)}
+                      className={`flex-shrink-0 px-4 py-3 rounded-xl border transition-all duration-300 backdrop-blur-sm min-w-[100px] ${
+                        selectedMode === mode.id
+                          ? `${mode.borderColor} ${mode.bgColor} shadow-lg border-opacity-80`
+                          : 'border-white/30 hover:border-white/50 glass-effect'
+                      }`}
+                    >
+                      <div className="text-lg mb-1">{mode.icon}</div>
+                      <div className="font-semibold text-white text-sm">{mode.name}</div>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ) : (
+              /* Desktop Mode Grid */
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                {modes.map((mode) => (
+                  <button
+                    key={mode.id}
+                    onClick={() => handleModeSelect(mode.id)}
+                    className={`p-4 rounded-lg border transition-all duration-300 backdrop-blur-sm ${
+                      selectedMode === mode.id
+                        ? `${mode.borderColor} ${mode.bgColor} shadow-lg border-opacity-80`
+                        : 'border-white/30 hover:border-white/50 glass-effect'
+                    }`}
+                  >
+                    <div className="text-2xl mb-2">{mode.icon}</div>
+                    <div className="font-semibold text-white">{mode.name}</div>
+                    <div className="text-xs text-white/80 mt-1">{mode.description}</div>
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
 
-          {/* Selected Mode Banner */}
-          {selectedModeData && (
+          {/* Selected Mode Banner - Desktop only */}
+          {!isMobile && selectedModeData && (
             <div className={`p-4 rounded-lg border backdrop-blur-sm ${selectedModeData.borderColor} ${selectedModeData.bgColor} mb-6 border-opacity-60`}>
               <div className="flex items-center space-x-3">
                 <span className="text-2xl">{selectedModeData.icon}</span>
@@ -326,26 +364,26 @@ const Therapy = () => {
           )}
 
           {/* Chat Area */}
-          <div className="glass-effect rounded-lg border border-white/30 p-6 mb-6 backdrop-blur-md">
-            <div className="h-96 overflow-y-auto mb-6 space-y-4">
+          <div className={`glass-effect rounded-lg border border-white/30 backdrop-blur-md flex-1 flex flex-col ${isMobile ? 'bg-black/20' : 'p-6 mb-6'}`}>
+            <div className={`flex-1 overflow-y-auto space-y-4 ${isMobile ? 'p-4 pb-2' : 'mb-6'} ${isMobile ? 'min-h-[60vh]' : 'h-96'}`}>
               {messages.length === 0 ? (
-                <div className="text-center text-white/70">
-                  <p>Select a therapy mode above to begin your session</p>
+                <div className="text-center text-white/70 py-8">
+                  <p>{isMobile ? 'Begin your therapy session' : 'Select a therapy mode above to begin your session'}</p>
                 </div>
               ) : (
                 messages.map((message) => (
                   <div
                     key={message.id}
-                    className={`flex ${message.isUser ? 'justify-end' : 'justify-start'}`}
+                    className={`flex ${message.isUser ? 'justify-end' : 'justify-start'} ${isMobile ? 'mb-6' : ''}`}
                   >
                     <div
-                      className={`max-w-sm p-3 rounded-lg backdrop-blur-sm ${
+                      className={`max-w-sm p-4 rounded-lg backdrop-blur-sm ${isMobile ? 'max-w-[85%]' : 'max-w-sm'} ${
                         message.isUser
                           ? 'bg-primary/80 text-white'
                           : 'bg-white/20 text-white border border-white/30'
                       }`}
                     >
-                      <p>{message.text}</p>
+                      <p className={`${isMobile ? 'text-base leading-relaxed' : ''}`}>{message.text}</p>
                       {message.images && message.images.length > 0 && (
                         <div className="mt-2 space-y-1">
                           {message.images.map((img, idx) => (
@@ -353,7 +391,7 @@ const Therapy = () => {
                           ))}
                         </div>
                       )}
-                      <p className={`text-xs mt-1 ${
+                      <p className={`text-xs mt-2 ${
                         message.isUser ? 'text-white/70' : 'text-white/60'
                       }`}>
                         {message.timestamp.toLocaleTimeString()}
@@ -364,32 +402,31 @@ const Therapy = () => {
               )}
             </div>
 
-            {/* Chat Input with Spotify Integration */}
-            <div className="flex items-center space-x-3">
-              <div className="flex-1">
-                <ChatInput
-                  inputText={inputText}
-                  setInputText={setInputText}
-                  onSendMessage={handleSendMessage}
-                  disabled={false}
-                  messageCount={messageCount}
-                />
-              </div>
-              <SpotifyIntegration mode={selectedMode} />
+            {/* Chat Input */}
+            <div className={`${isMobile ? 'p-4 pt-2 border-t border-white/20' : ''}`}>
+              <ChatInput
+                inputText={inputText}
+                setInputText={setInputText}
+                onSendMessage={handleSendMessage}
+                disabled={false}
+                messageCount={messageCount}
+              />
             </div>
           </div>
 
-          {/* Tips Section */}
-          <div className="glass-effect rounded-lg border border-white/30 p-6 backdrop-blur-md">
-            <h3 className="font-semibold text-white mb-4">Tips for your session</h3>
-            <div className="space-y-2 text-green-300">
-              <p>• Be honest about your feelings – there's no judgment here.</p>
-              <p>• Take your time to reflect before responding.</p>
-              <p>• Switch modes based on what you need most right now.</p>
-              <p>• Upload images to share visual context with your AI therapist.</p>
-              <p>• Remember: This is a safe space for your thoughts.</p>
+          {/* Tips Section - Desktop only */}
+          {!isMobile && (
+            <div className="glass-effect rounded-lg border border-white/30 p-6 backdrop-blur-md">
+              <h3 className="font-semibold text-white mb-4">Tips for your session</h3>
+              <div className="space-y-2 text-green-300">
+                <p>• Be honest about your feelings – there's no judgment here.</p>
+                <p>• Take your time to reflect before responding.</p>
+                <p>• Switch modes based on what you need most right now.</p>
+                <p>• Upload images to share visual context with your AI therapist.</p>
+                <p>• Remember: This is a safe space for your thoughts.</p>
+              </div>
             </div>
-          </div>
+          )}
         </div>
       </div>
     </div>
