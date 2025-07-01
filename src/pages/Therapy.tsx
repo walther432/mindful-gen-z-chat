@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from 'react';
 import Navigation from '@/components/ui/navigation';
 import ChatInput from '@/components/therapy/ChatInput';
@@ -120,16 +121,6 @@ const Therapy = () => {
     }
   };
 
-  const getModePrompts = (mode: TherapyMode): string => {
-    const prompts = {
-      reflect: "I'm here to help you reflect on your thoughts and feelings. What's been on your mind lately?",
-      recover: "Let's work together on your healing journey. What would you like to process today?",
-      rebuild: "I'm here to support you as you rebuild and rediscover yourself. Where shall we start?",
-      evolve: "Ready to grow and evolve? Let's explore what's possible for you. What area of your life are you looking to transform?"
-    };
-    return prompts[mode];
-  };
-
   const handleSessionSelect = (session: TherapySession) => {
     setCurrentSession(session);
   };
@@ -140,26 +131,12 @@ const Therapy = () => {
     if (!currentSession) {
       const newSession = await createSession(mode.charAt(0).toUpperCase() + mode.slice(1), 'New Session');
       if (newSession) {
-        const welcomeMessage: Message = {
-          id: Date.now().toString(),
-          text: getModePrompts(mode),
-          isUser: false,
-          timestamp: new Date()
-        };
-        setMessages([welcomeMessage]);
-        await saveMessageToDatabase(newSession.id, welcomeMessage);
+        // Don't add any welcome message - let user start the conversation
+        setMessages([]);
       }
     } else {
       await updateSession(currentSession.id, { mode: mode.charAt(0).toUpperCase() + mode.slice(1) });
-      
-      const welcomeMessage: Message = {
-        id: Date.now().toString(),
-        text: getModePrompts(mode),
-        isUser: false,
-        timestamp: new Date()
-      };
-      setMessages([welcomeMessage]);
-      await saveMessageToDatabase(currentSession.id, welcomeMessage);
+      // Don't add any welcome message when switching modes
     }
   };
 
@@ -238,19 +215,24 @@ const Therapy = () => {
 
   return (
     <div className="min-h-screen relative overflow-hidden">
-      {/* Full-screen background image */}
-      <div 
-        className="absolute inset-0 w-full h-full z-[-10] transition-all duration-500"
-        style={{
-          backgroundImage: `url('${modeToBackgroundImage[selectedMode]}')`,
-          backgroundSize: 'cover',
-          backgroundPosition: 'center',
-          backgroundRepeat: 'no-repeat'
-        }}
-      />
-      
-      {/* Dark overlay for readability */}
-      <div className="absolute inset-0 bg-black/50 z-[-5]" />
+      {/* Mobile: Full glassmorphism background */}
+      {isMobile ? (
+        <div className="absolute inset-0 bg-gradient-to-br from-slate-900 via-purple-900/20 to-slate-800 backdrop-blur-xl" />
+      ) : (
+        /* Desktop: Background image with overlay */
+        <>
+          <div 
+            className="absolute inset-0 w-full h-full z-[-10] transition-all duration-500"
+            style={{
+              backgroundImage: `url('${modeToBackgroundImage[selectedMode]}')`,
+              backgroundSize: 'cover',
+              backgroundPosition: 'center',
+              backgroundRepeat: 'no-repeat'
+            }}
+          />
+          <div className="absolute inset-0 bg-black/50 z-[-5]" />
+        </>
+      )}
       
       {/* Desktop Sidebar - Hidden on Mobile */}
       <div className="hidden md:block">
@@ -267,7 +249,7 @@ const Therapy = () => {
           <Navigation />
         </div>
         
-        {/* Mobile Navigation - Glassmorphism bottom bar */}
+        {/* Mobile Navigation */}
         {isMobile && (
           <div className="fixed top-0 left-0 right-0 z-50 glass-effect border-b border-white/20 backdrop-blur-xl bg-black/20 p-4">
             <div className="flex items-center justify-between">
@@ -316,14 +298,14 @@ const Therapy = () => {
                     <button
                       key={mode.id}
                       onClick={() => handleModeSelect(mode.id)}
-                      className={`flex-shrink-0 px-4 py-3 rounded-xl border transition-all duration-300 backdrop-blur-sm min-w-[100px] ${
+                      className={`flex-shrink-0 px-6 py-4 rounded-xl border transition-all duration-300 backdrop-blur-sm min-w-[120px] ${
                         selectedMode === mode.id
                           ? `${mode.borderColor} ${mode.bgColor} shadow-lg border-opacity-80`
                           : 'border-white/30 hover:border-white/50 glass-effect'
                       }`}
                     >
-                      <div className="text-lg mb-1">{mode.icon}</div>
-                      <div className="font-semibold text-white text-sm">{mode.name}</div>
+                      <div className="text-xl mb-2">{mode.icon}</div>
+                      <div className="font-semibold text-white text-base">{mode.name}</div>
                     </button>
                   ))}
                 </div>
@@ -364,20 +346,22 @@ const Therapy = () => {
           )}
 
           {/* Chat Area */}
-          <div className={`glass-effect rounded-lg border border-white/30 backdrop-blur-md flex-1 flex flex-col ${isMobile ? 'bg-black/20' : 'p-6 mb-6'}`}>
-            <div className={`flex-1 overflow-y-auto space-y-4 ${isMobile ? 'p-4 pb-2' : 'mb-6'} ${isMobile ? 'min-h-[60vh]' : 'h-96'}`}>
+          <div className={`glass-effect rounded-lg border border-white/30 backdrop-blur-md flex-1 flex flex-col ${isMobile ? 'bg-black/20 mx-0' : 'p-6 mb-6'}`}>
+            <div className={`flex-1 overflow-y-auto space-y-6 ${isMobile ? 'p-6 pb-4' : 'mb-6'} ${isMobile ? 'min-h-[65vh]' : 'h-96'}`}>
               {messages.length === 0 ? (
-                <div className="text-center text-white/70 py-8">
-                  <p>{isMobile ? 'Begin your therapy session' : 'Select a therapy mode above to begin your session'}</p>
+                <div className="text-center text-white/70 py-12">
+                  <p className={isMobile ? 'text-lg' : ''}>
+                    {isMobile ? 'Start your therapy session' : 'Select a therapy mode above to begin your session'}
+                  </p>
                 </div>
               ) : (
                 messages.map((message) => (
                   <div
                     key={message.id}
-                    className={`flex ${message.isUser ? 'justify-end' : 'justify-start'} ${isMobile ? 'mb-6' : ''}`}
+                    className={`flex ${message.isUser ? 'justify-end' : 'justify-start'}`}
                   >
                     <div
-                      className={`max-w-sm p-4 rounded-lg backdrop-blur-sm ${isMobile ? 'max-w-[85%]' : 'max-w-sm'} ${
+                      className={`${isMobile ? 'max-w-[85%]' : 'max-w-sm'} p-4 rounded-lg backdrop-blur-sm ${
                         message.isUser
                           ? 'bg-primary/80 text-white'
                           : 'bg-white/20 text-white border border-white/30'
@@ -403,7 +387,7 @@ const Therapy = () => {
             </div>
 
             {/* Chat Input */}
-            <div className={`${isMobile ? 'p-4 pt-2 border-t border-white/20' : ''}`}>
+            <div className={`${isMobile ? 'p-6 pt-4 border-t border-white/20' : ''}`}>
               <ChatInput
                 inputText={inputText}
                 setInputText={setInputText}
