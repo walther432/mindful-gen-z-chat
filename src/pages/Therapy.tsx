@@ -235,28 +235,38 @@ const Therapy = () => {
       )}
       
       {/* Desktop Sidebar - Hidden on Mobile */}
-      <div className="hidden md:block">
+      <div className="hidden lg:block">
         <TherapySidebar 
           onSessionSelect={handleSessionSelect}
           currentSessionId={currentSession?.id}
         />
       </div>
 
+      {/* Mobile Sidebar Toggle - Floating Button */}
+      {isMobile && (
+        <Button
+          onClick={() => setIsMobileSidebarOpen(true)}
+          className="fixed top-6 left-4 z-40 w-12 h-12 rounded-full glass-effect border border-white/20 backdrop-blur-xl bg-black/20 text-white hover:bg-black/30 transition-all duration-200 shadow-lg"
+        >
+          <Menu size={20} />
+        </Button>
+      )}
+
       {/* Mobile Sidebar Overlay */}
       {isMobile && isMobileSidebarOpen && (
         <>
           <div 
-            className="fixed inset-0 bg-black/50 z-40"
+            className="fixed inset-0 bg-black/60 z-50 backdrop-blur-sm"
             onClick={() => setIsMobileSidebarOpen(false)}
           />
-          <div className="fixed left-0 top-0 h-full w-80 z-50 glass-effect border-r border-white/20 backdrop-blur-xl">
+          <div className="fixed left-0 top-0 h-full w-80 z-50 glass-effect border-r border-white/20 backdrop-blur-xl bg-black/20">
             <div className="p-4 border-b border-white/20 flex items-center justify-between">
-              <h2 className="text-white font-semibold">Therapy Sessions</h2>
+              <h2 className="text-white font-semibold text-lg">Sessions</h2>
               <Button
                 variant="ghost"
                 size="sm"
                 onClick={() => setIsMobileSidebarOpen(false)}
-                className="text-white/80 hover:text-white hover:bg-white/10"
+                className="text-white/80 hover:text-white hover:bg-white/10 w-8 h-8 rounded-full"
               >
                 <X size={18} />
               </Button>
@@ -272,25 +282,18 @@ const Therapy = () => {
       )}
       
       {/* Main Content */}
-      <div className={`${isMobile ? '' : 'ml-12'} transition-all duration-300 min-h-screen flex flex-col`}>
+      <div className={`${isMobile ? '' : 'lg:ml-80'} transition-all duration-300 min-h-screen flex flex-col`}>
         {/* Navigation - Desktop only */}
-        <div className="hidden md:block">
+        <div className="hidden lg:block">
           <Navigation />
         </div>
         
         {/* Mobile Top Bar */}
         {isMobile && (
           <div className="fixed top-0 left-0 right-0 z-30 glass-effect border-b border-white/20 backdrop-blur-xl bg-black/20">
-            <div className="flex items-center justify-between p-4">
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => setIsMobileSidebarOpen(true)}
-                className="text-white/80 hover:text-white hover:bg-white/10"
-              >
-                <Menu size={20} />
-              </Button>
-              <h1 className="text-lg font-bold text-white truncate flex-1 mx-4">
+            <div className="flex items-center justify-between px-6 py-4">
+              <div className="w-12" /> {/* Spacer for centering */}
+              <h1 className="text-lg font-bold text-white truncate flex-1 text-center">
                 {currentSession ? currentSession.title : 'Therapy'}
               </h1>
               <SpotifyIntegration mode={selectedMode} />
@@ -303,153 +306,157 @@ const Therapy = () => {
           <ReflectiveCheckIn onClose={() => setShowReflectiveCheckIn(false)} />
         )}
         
-        <div className={`flex-1 flex flex-col ${isMobile ? 'pt-20' : 'max-w-4xl mx-auto'} ${isMobile ? 'px-0' : 'px-4 sm:px-6 lg:px-8 py-8'} relative`}>
-          {/* Premium Status Banner - Desktop only */}
-          {!isMobile && isPremium && (
-            <div className="mb-6 glass-effect border border-yellow-500/30 rounded-lg p-4">
-              <div className="flex items-center space-x-2">
-                <span className="bg-gradient-to-r from-yellow-400 to-orange-500 text-black text-sm px-3 py-1 rounded-full font-semibold">
-                  PRO
-                </span>
-                <span className="text-white font-medium">Premium Active</span>
-                <span className="text-white/80">- 300 messages & 25 uploads per day</span>
-              </div>
-            </div>
-          )}
-
-          {/* Mode Selector */}
-          <div className={`${isMobile ? 'mb-0' : 'mb-8'}`}>
-            {!isMobile && (
-              <div className="flex items-center justify-between mb-6">
-                <h1 className="text-2xl font-bold text-white">
-                  {currentSession ? `Therapy Session: ${currentSession.title}` : 'Choose your therapy mode'}
-                </h1>
+        <div className={`flex-1 flex flex-col ${isMobile ? 'pt-20' : ''} relative`}>
+          {/* Desktop Container with Optimized Width */}
+          <div className={`${isMobile ? 'px-0' : 'max-w-6xl mx-auto w-full px-8 py-8'} flex-1 flex flex-col`}>
+            {/* Premium Status Banner - Desktop only */}
+            {!isMobile && isPremium && (
+              <div className="mb-8 glass-effect border border-yellow-500/30 rounded-xl p-6">
+                <div className="flex items-center space-x-3">
+                  <span className="bg-gradient-to-r from-yellow-400 to-orange-500 text-black text-sm px-4 py-2 rounded-full font-semibold">
+                    PRO
+                  </span>
+                  <span className="text-white font-medium text-lg">Premium Active</span>
+                  <span className="text-white/80">- 300 messages & 25 uploads per day</span>
+                </div>
               </div>
             )}
-            
-            {/* Mobile Mode Tabs - Full width, better spacing */}
-            {isMobile ? (
-              <div className="fixed top-20 left-0 right-0 z-20 bg-black/20 backdrop-blur-md border-b border-white/20">
-                <div className="overflow-x-auto">
-                  <div className="flex space-x-1 p-4 min-w-max">
-                    {modes.map((mode) => (
-                      <button
-                        key={mode.id}
-                        onClick={() => handleModeSelect(mode.id)}
-                        className={`flex-shrink-0 px-6 py-4 rounded-xl border transition-all duration-300 backdrop-blur-sm min-w-[140px] ${
-                          selectedMode === mode.id
-                            ? `${mode.borderColor} ${mode.bgColor} shadow-lg border-opacity-80`
-                            : 'border-white/30 hover:border-white/50 glass-effect'
-                        }`}
-                      >
-                        <div className="text-xl mb-2">{mode.icon}</div>
-                        <div className="font-semibold text-white text-base">{mode.name}</div>
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            ) : (
-              /* Desktop Mode Grid */
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                {modes.map((mode) => (
-                  <button
-                    key={mode.id}
-                    onClick={() => handleModeSelect(mode.id)}
-                    className={`p-4 rounded-lg border transition-all duration-300 backdrop-blur-sm ${
-                      selectedMode === mode.id
-                        ? `${mode.borderColor} ${mode.bgColor} shadow-lg border-opacity-80`
-                        : 'border-white/30 hover:border-white/50 glass-effect'
-                    }`}
-                  >
-                    <div className="text-2xl mb-2">{mode.icon}</div>
-                    <div className="font-semibold text-white">{mode.name}</div>
-                    <div className="text-xs text-white/80 mt-1">{mode.description}</div>
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
 
-          {/* Selected Mode Banner - Desktop only */}
-          {!isMobile && selectedModeData && (
-            <div className={`p-4 rounded-lg border backdrop-blur-sm ${selectedModeData.borderColor} ${selectedModeData.bgColor} mb-6 border-opacity-60`}>
-              <div className="flex items-center space-x-3">
-                <span className="text-2xl">{selectedModeData.icon}</span>
-                <div>
-                  <h3 className="font-semibold text-white">{selectedModeData.name} Mode</h3>
-                  <p className="text-sm text-white/80">{selectedModeData.description}</p>
+            {/* Mode Selector */}
+            <div className={`${isMobile ? 'mb-0' : 'mb-10'}`}>
+              {!isMobile && (
+                <div className="flex items-center justify-between mb-8">
+                  <h1 className="text-3xl font-bold text-white">
+                    {currentSession ? `Therapy Session: ${currentSession.title}` : 'Choose your therapy mode'}
+                  </h1>
+                  <SpotifyIntegration mode={selectedMode} />
                 </div>
-              </div>
-            </div>
-          )}
-
-          {/* Chat Area */}
-          <div className={`glass-effect ${isMobile ? 'rounded-none border-0' : 'rounded-lg border border-white/30'} backdrop-blur-md flex-1 flex flex-col ${isMobile ? 'bg-black/10 mt-20' : 'p-6 mb-6'}`}>
-            <div className={`flex-1 overflow-y-auto space-y-6 ${isMobile ? 'p-6 pb-4' : 'mb-6'} ${isMobile ? 'min-h-[calc(100vh-280px)]' : 'h-96'}`}>
-              {messages.length === 0 ? (
-                <div className="text-center text-white/70 py-12">
-                  <p className={isMobile ? 'text-lg px-4' : ''}>
-                    {isMobile ? 'Start your therapy session' : 'Select a therapy mode above to begin your session'}
-                  </p>
-                </div>
-              ) : (
-                messages.map((message) => (
-                  <div
-                    key={message.id}
-                    className={`flex ${message.isUser ? 'justify-end' : 'justify-start'}`}
-                  >
-                    <div
-                      className={`${isMobile ? 'max-w-[85%]' : 'max-w-sm'} p-4 rounded-xl backdrop-blur-sm ${
-                        message.isUser
-                          ? 'bg-primary/80 text-white'
-                          : 'bg-white/20 text-white border border-white/30'
-                      } ${isMobile ? 'mb-4' : ''}`}
-                    >
-                      <p className={`${isMobile ? 'text-base leading-relaxed' : ''}`}>{message.text}</p>
-                      {message.images && message.images.length > 0 && (
-                        <div className="mt-2 space-y-1">
-                          {message.images.map((img, idx) => (
-                            <img key={idx} src={img} alt="Upload" className="max-w-full rounded" />
-                          ))}
-                        </div>
-                      )}
-                      <p className={`text-xs mt-2 ${
-                        message.isUser ? 'text-white/70' : 'text-white/60'
-                      }`}>
-                        {message.timestamp.toLocaleTimeString()}
-                      </p>
+              )}
+              
+              {/* Mobile Mode Tabs - Horizontal Scroll */}
+              {isMobile ? (
+                <div className="fixed top-20 left-0 right-0 z-20 bg-black/20 backdrop-blur-md border-b border-white/20">
+                  <div className="overflow-x-auto scrollbar-hide">
+                    <div className="flex space-x-3 px-6 py-4 min-w-max">
+                      {modes.map((mode) => (
+                        <button
+                          key={mode.id}
+                          onClick={() => handleModeSelect(mode.id)}
+                          className={`flex-shrink-0 px-6 py-4 rounded-2xl border transition-all duration-300 backdrop-blur-sm min-w-[140px] ${
+                            selectedMode === mode.id
+                              ? `${mode.borderColor} ${mode.bgColor} shadow-xl border-opacity-90 scale-105`
+                              : 'border-white/30 hover:border-white/50 glass-effect hover:scale-102'
+                          }`}
+                        >
+                          <div className="text-2xl mb-2">{mode.icon}</div>
+                          <div className="font-semibold text-white text-base">{mode.name}</div>
+                        </button>
+                      ))}
                     </div>
                   </div>
-                ))
+                </div>
+              ) : (
+                /* Desktop Mode Grid - Better Spacing */
+                <div className="grid grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+                  {modes.map((mode) => (
+                    <button
+                      key={mode.id}
+                      onClick={() => handleModeSelect(mode.id)}
+                      className={`p-6 rounded-xl border transition-all duration-300 backdrop-blur-sm hover:scale-105 ${
+                        selectedMode === mode.id
+                          ? `${mode.borderColor} ${mode.bgColor} shadow-xl border-opacity-90`
+                          : 'border-white/30 hover:border-white/50 glass-effect'
+                      }`}
+                    >
+                      <div className="text-3xl mb-3">{mode.icon}</div>
+                      <div className="font-semibold text-white text-lg">{mode.name}</div>
+                      <div className="text-sm text-white/80 mt-2">{mode.description}</div>
+                    </button>
+                  ))}
+                </div>
               )}
             </div>
 
-            {/* Chat Input */}
-            <div className={`${isMobile ? 'p-6 pt-4 border-t border-white/20 pb-8' : ''}`}>
-              <ChatInput
-                inputText={inputText}
-                setInputText={setInputText}
-                onSendMessage={handleSendMessage}
-                disabled={false}
-                messageCount={messageCount}
-              />
-            </div>
-          </div>
+            {/* Selected Mode Banner - Desktop only */}
+            {!isMobile && selectedModeData && (
+              <div className={`p-6 rounded-xl border backdrop-blur-sm ${selectedModeData.borderColor} ${selectedModeData.bgColor} mb-8 border-opacity-70 shadow-lg`}>
+                <div className="flex items-center space-x-4">
+                  <span className="text-3xl">{selectedModeData.icon}</span>
+                  <div>
+                    <h3 className="font-semibold text-white text-xl">{selectedModeData.name} Mode</h3>
+                    <p className="text-white/80 mt-1">{selectedModeData.description}</p>
+                  </div>
+                </div>
+              </div>
+            )}
 
-          {/* Tips Section - Desktop only */}
-          {!isMobile && (
-            <div className="glass-effect rounded-lg border border-white/30 p-6 backdrop-blur-md">
-              <h3 className="font-semibold text-white mb-4">Tips for your session</h3>
-              <div className="space-y-2 text-green-300">
-                <p>• Be honest about your feelings – there's no judgment here.</p>
-                <p>• Take your time to reflect before responding.</p>
-                <p>• Switch modes based on what you need most right now.</p>
-                <p>• Upload images to share visual context with your AI therapist.</p>
-                <p>• Remember: This is a safe space for your thoughts.</p>
+            {/* Chat Area */}
+            <div className={`glass-effect ${isMobile ? 'rounded-none border-0' : 'rounded-xl border border-white/30'} backdrop-blur-md flex-1 flex flex-col ${isMobile ? 'bg-black/10 mt-20' : 'p-8 mb-8 shadow-2xl'}`}>
+              <div className={`flex-1 overflow-y-auto space-y-6 ${isMobile ? 'p-6 pb-4' : 'mb-8'} ${isMobile ? 'min-h-[calc(100vh-280px)]' : 'min-h-[500px]'}`}>
+                {messages.length === 0 ? (
+                  <div className="text-center text-white/70 py-16">
+                    <p className={`${isMobile ? 'text-lg px-4' : 'text-xl'}`}>
+                      {isMobile ? 'Start your therapy session' : 'Select a therapy mode above to begin your session'}
+                    </p>
+                  </div>
+                ) : (
+                  messages.map((message) => (
+                    <div
+                      key={message.id}
+                      className={`flex ${message.isUser ? 'justify-end' : 'justify-start'}`}
+                    >
+                      <div
+                        className={`${isMobile ? 'max-w-[85%]' : 'max-w-2xl'} p-5 rounded-2xl backdrop-blur-sm ${
+                          message.isUser
+                            ? 'bg-primary/80 text-white shadow-lg'
+                            : 'bg-white/20 text-white border border-white/30 shadow-lg'
+                        } ${isMobile ? 'mb-4' : ''}`}
+                      >
+                        <p className={`${isMobile ? 'text-base leading-relaxed' : 'text-base leading-relaxed'}`}>{message.text}</p>
+                        {message.images && message.images.length > 0 && (
+                          <div className="mt-3 space-y-2">
+                            {message.images.map((img, idx) => (
+                              <img key={idx} src={img} alt="Upload" className="max-w-full rounded-lg" />
+                            ))}
+                          </div>
+                        )}
+                        <p className={`text-xs mt-3 ${
+                          message.isUser ? 'text-white/70' : 'text-white/60'
+                        }`}>
+                          {message.timestamp.toLocaleTimeString()}
+                        </p>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+
+              {/* Chat Input */}
+              <div className={`${isMobile ? 'p-6 pt-4 border-t border-white/20 pb-8' : ''}`}>
+                <ChatInput
+                  inputText={inputText}
+                  setInputText={setInputText}
+                  onSendMessage={handleSendMessage}
+                  disabled={false}
+                  messageCount={messageCount}
+                />
               </div>
             </div>
-          )}
+
+            {/* Tips Section - Desktop only */}
+            {!isMobile && (
+              <div className="glass-effect rounded-xl border border-white/30 p-8 backdrop-blur-md shadow-xl">
+                <h3 className="font-semibold text-white mb-6 text-xl">Tips for your session</h3>
+                <div className="space-y-3 text-green-300 text-base">
+                  <p>• Be honest about your feelings – there's no judgment here.</p>
+                  <p>• Take your time to reflect before responding.</p>
+                  <p>• Switch modes based on what you need most right now.</p>
+                  <p>• Upload images to share visual context with your AI therapist.</p>
+                  <p>• Remember: This is a safe space for your thoughts.</p>
+                </div>
+              </div>
+            )}
+          </div>
         </div>
       </div>
     </div>
