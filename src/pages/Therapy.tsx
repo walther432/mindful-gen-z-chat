@@ -4,6 +4,7 @@ import ChatInput from '@/components/therapy/ChatInput';
 import ReflectiveCheckIn from '@/components/therapy/ReflectiveCheckIn';
 import SpotifyIntegration from '@/components/therapy/SpotifyIntegration';
 import TherapySidebar from '@/components/therapy/TherapySidebar';
+import ChatScrollArea from '@/components/therapy/ChatScrollArea';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTherapySessions, TherapySession } from '@/hooks/useTherapySessions';
 import { supabase } from '@/integrations/supabase/client';
@@ -215,8 +216,8 @@ const Therapy = () => {
   const selectedModeData = modes.find(mode => mode.id === selectedMode);
 
   return (
-    <div className="min-h-screen relative overflow-hidden">
-      {/* Mobile: Full glassmorphism background with image overlay - Desktop: Background image with overlay */}
+    <div className="min-h-screen relative overflow-hidden smooth-scroll">
+      {/* Background and overlays - keep existing code */}
       {isMobile ? (
         <>
           <div 
@@ -228,7 +229,7 @@ const Therapy = () => {
               backgroundRepeat: 'no-repeat'
             }}
           />
-          <div className="absolute inset-0 bg-black/40 backdrop-blur-[2px] z-[-5]" />
+          <div className="absolute inset-0 bg-black/60 backdrop-blur-[3px] z-[-5]" />
         </>
       ) : (
         <>
@@ -293,7 +294,7 @@ const Therapy = () => {
       )}
       
       {/* Main Content */}
-      <div className={`${isMobile ? '' : 'lg:ml-80'} transition-all duration-300 min-h-screen flex flex-col`}>
+      <div className={`${isMobile ? '' : 'lg:ml-80'} transition-all duration-300 min-h-screen flex flex-col smooth-scroll`}>
         {/* Navigation - Desktop only */}
         <div className="hidden lg:block">
           <Navigation />
@@ -303,7 +304,7 @@ const Therapy = () => {
         {isMobile && (
           <div className="fixed top-0 left-0 right-0 z-30 glass-effect border-b border-white/10 backdrop-blur-xl bg-black/10">
             <div className="flex items-center justify-between px-6 py-4">
-              <div className="w-12" /> {/* Spacer for centering */}
+              <div className="w-12" />
               <h1 className="text-lg font-bold text-white truncate flex-1 text-center">
                 {currentSession ? currentSession.title : 'Therapy'}
               </h1>
@@ -319,7 +320,7 @@ const Therapy = () => {
         
         <div className={`flex-1 flex flex-col ${isMobile ? 'pt-20' : ''} relative`}>
           {/* Desktop Container with Optimized Width */}
-          <div className={`${isMobile ? 'px-0' : 'max-w-6xl mx-auto w-full px-8 py-8'} flex-1 flex flex-col`}>
+          <div className={`${isMobile ? 'px-0' : 'max-w-7xl mx-auto w-full px-8 py-8 2xl:max-w-[1400px]'} flex-1 flex flex-col`}>
             {/* Premium Status Banner - Desktop only */}
             {!isMobile && isPremium && (
               <div className="mb-8 glass-effect border border-yellow-500/30 rounded-xl p-6">
@@ -377,12 +378,12 @@ const Therapy = () => {
               </div>
             )}
 
-            {/* Chat Area */}
+            {/* Chat Area with Smooth Scrolling */}
             <div className={`${isMobile 
               ? 'rounded-none border-0 bg-black/5 backdrop-blur-md flex-1 flex flex-col' 
               : 'glass-effect rounded-xl border border-white/30 backdrop-blur-md flex-1 flex flex-col p-8 mb-8 shadow-2xl'
             }`}>
-              <div className={`flex-1 overflow-y-auto space-y-6 ${isMobile ? 'p-6 pb-4 min-h-[calc(100vh-160px)]' : 'mb-8 min-h-[500px]'}`}>
+              <ChatScrollArea messages={messages} isMobile={isMobile}>
                 {messages.length === 0 ? (
                   <div className="text-center text-white/70 py-16">
                     <p className={`${isMobile ? 'text-lg px-4' : 'text-xl'}`}>
@@ -419,7 +420,7 @@ const Therapy = () => {
                     </div>
                   ))
                 )}
-              </div>
+              </ChatScrollArea>
 
               {/* Chat Input */}
               <div className={`${isMobile ? 'p-6 pt-4 border-t border-white/10 pb-8' : ''}`}>
