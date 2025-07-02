@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import Navigation from '@/components/ui/navigation';
 import ChatInput from '@/components/therapy/ChatInput';
@@ -10,6 +9,8 @@ import { useTherapySessions, TherapySession } from '@/hooks/useTherapySessions';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { useIsMobile } from '@/hooks/use-mobile';
+import { Menu, X } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 
 type TherapyMode = 'reflect' | 'recover' | 'rebuild' | 'evolve';
 
@@ -38,6 +39,7 @@ const Therapy = () => {
   const [inputText, setInputText] = useState('');
   const [messageCount, setMessageCount] = useState(0);
   const [showReflectiveCheckIn, setShowReflectiveCheckIn] = useState(true);
+  const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
 
   const modes = [
     {
@@ -123,6 +125,7 @@ const Therapy = () => {
 
   const handleSessionSelect = (session: TherapySession) => {
     setCurrentSession(session);
+    setIsMobileSidebarOpen(false);
   };
 
   const handleModeSelect = async (mode: TherapyMode) => {
@@ -131,12 +134,10 @@ const Therapy = () => {
     if (!currentSession) {
       const newSession = await createSession(mode.charAt(0).toUpperCase() + mode.slice(1), 'New Session');
       if (newSession) {
-        // Don't add any welcome message - let user start the conversation
         setMessages([]);
       }
     } else {
       await updateSession(currentSession.id, { mode: mode.charAt(0).toUpperCase() + mode.slice(1) });
-      // Don't add any welcome message when switching modes
     }
   };
 
@@ -215,11 +216,10 @@ const Therapy = () => {
 
   return (
     <div className="min-h-screen relative overflow-hidden">
-      {/* Mobile: Full glassmorphism background */}
+      {/* Mobile: Full glassmorphism background - Desktop: Background image with overlay */}
       {isMobile ? (
-        <div className="absolute inset-0 bg-gradient-to-br from-slate-900 via-purple-900/20 to-slate-800 backdrop-blur-xl" />
+        <div className="absolute inset-0 bg-gradient-to-br from-slate-900 via-purple-900/30 to-slate-800" />
       ) : (
-        /* Desktop: Background image with overlay */
         <>
           <div 
             className="absolute inset-0 w-full h-full z-[-10] transition-all duration-500"
@@ -241,6 +241,35 @@ const Therapy = () => {
           currentSessionId={currentSession?.id}
         />
       </div>
+
+      {/* Mobile Sidebar Overlay */}
+      {isMobile && isMobileSidebarOpen && (
+        <>
+          <div 
+            className="fixed inset-0 bg-black/50 z-40"
+            onClick={() => setIsMobileSidebarOpen(false)}
+          />
+          <div className="fixed left-0 top-0 h-full w-80 z-50 glass-effect border-r border-white/20 backdrop-blur-xl">
+            <div className="p-4 border-b border-white/20 flex items-center justify-between">
+              <h2 className="text-white font-semibold">Therapy Sessions</h2>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setIsMobileSidebarOpen(false)}
+                className="text-white/80 hover:text-white hover:bg-white/10"
+              >
+                <X size={18} />
+              </Button>
+            </div>
+            <div className="h-full overflow-hidden">
+              <TherapySidebar 
+                onSessionSelect={handleSessionSelect}
+                currentSessionId={currentSession?.id}
+              />
+            </div>
+          </div>
+        </>
+      )}
       
       {/* Main Content */}
       <div className={`${isMobile ? '' : 'ml-12'} transition-all duration-300 min-h-screen flex flex-col`}>
@@ -249,11 +278,19 @@ const Therapy = () => {
           <Navigation />
         </div>
         
-        {/* Mobile Navigation */}
+        {/* Mobile Top Bar */}
         {isMobile && (
-          <div className="fixed top-0 left-0 right-0 z-50 glass-effect border-b border-white/20 backdrop-blur-xl bg-black/20 p-4">
-            <div className="flex items-center justify-between">
-              <h1 className="text-lg font-bold text-white">
+          <div className="fixed top-0 left-0 right-0 z-30 glass-effect border-b border-white/20 backdrop-blur-xl bg-black/20">
+            <div className="flex items-center justify-between p-4">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setIsMobileSidebarOpen(true)}
+                className="text-white/80 hover:text-white hover:bg-white/10"
+              >
+                <Menu size={20} />
+              </Button>
+              <h1 className="text-lg font-bold text-white truncate flex-1 mx-4">
                 {currentSession ? currentSession.title : 'Therapy'}
               </h1>
               <SpotifyIntegration mode={selectedMode} />
@@ -266,7 +303,7 @@ const Therapy = () => {
           <ReflectiveCheckIn onClose={() => setShowReflectiveCheckIn(false)} />
         )}
         
-        <div className={`flex-1 flex flex-col ${isMobile ? 'pt-20 pb-4' : 'max-w-4xl mx-auto'} px-4 sm:px-6 lg:px-8 py-8 relative`}>
+        <div className={`flex-1 flex flex-col ${isMobile ? 'pt-20' : 'max-w-4xl mx-auto'} ${isMobile ? 'px-0' : 'px-4 sm:px-6 lg:px-8 py-8'} relative`}>
           {/* Premium Status Banner - Desktop only */}
           {!isMobile && isPremium && (
             <div className="mb-6 glass-effect border border-yellow-500/30 rounded-lg p-4">
@@ -281,7 +318,7 @@ const Therapy = () => {
           )}
 
           {/* Mode Selector */}
-          <div className={`${isMobile ? 'mb-4' : 'mb-8'}`}>
+          <div className={`${isMobile ? 'mb-0' : 'mb-8'}`}>
             {!isMobile && (
               <div className="flex items-center justify-between mb-6">
                 <h1 className="text-2xl font-bold text-white">
@@ -290,24 +327,26 @@ const Therapy = () => {
               </div>
             )}
             
-            {/* Mobile Mode Tabs */}
+            {/* Mobile Mode Tabs - Full width, better spacing */}
             {isMobile ? (
-              <div className="overflow-x-auto">
-                <div className="flex space-x-3 pb-2 min-w-max px-1">
-                  {modes.map((mode) => (
-                    <button
-                      key={mode.id}
-                      onClick={() => handleModeSelect(mode.id)}
-                      className={`flex-shrink-0 px-6 py-4 rounded-xl border transition-all duration-300 backdrop-blur-sm min-w-[120px] ${
-                        selectedMode === mode.id
-                          ? `${mode.borderColor} ${mode.bgColor} shadow-lg border-opacity-80`
-                          : 'border-white/30 hover:border-white/50 glass-effect'
-                      }`}
-                    >
-                      <div className="text-xl mb-2">{mode.icon}</div>
-                      <div className="font-semibold text-white text-base">{mode.name}</div>
-                    </button>
-                  ))}
+              <div className="fixed top-20 left-0 right-0 z-20 bg-black/20 backdrop-blur-md border-b border-white/20">
+                <div className="overflow-x-auto">
+                  <div className="flex space-x-1 p-4 min-w-max">
+                    {modes.map((mode) => (
+                      <button
+                        key={mode.id}
+                        onClick={() => handleModeSelect(mode.id)}
+                        className={`flex-shrink-0 px-6 py-4 rounded-xl border transition-all duration-300 backdrop-blur-sm min-w-[140px] ${
+                          selectedMode === mode.id
+                            ? `${mode.borderColor} ${mode.bgColor} shadow-lg border-opacity-80`
+                            : 'border-white/30 hover:border-white/50 glass-effect'
+                        }`}
+                      >
+                        <div className="text-xl mb-2">{mode.icon}</div>
+                        <div className="font-semibold text-white text-base">{mode.name}</div>
+                      </button>
+                    ))}
+                  </div>
                 </div>
               </div>
             ) : (
@@ -346,11 +385,11 @@ const Therapy = () => {
           )}
 
           {/* Chat Area */}
-          <div className={`glass-effect rounded-lg border border-white/30 backdrop-blur-md flex-1 flex flex-col ${isMobile ? 'bg-black/20 mx-0' : 'p-6 mb-6'}`}>
-            <div className={`flex-1 overflow-y-auto space-y-6 ${isMobile ? 'p-6 pb-4' : 'mb-6'} ${isMobile ? 'min-h-[65vh]' : 'h-96'}`}>
+          <div className={`glass-effect ${isMobile ? 'rounded-none border-0' : 'rounded-lg border border-white/30'} backdrop-blur-md flex-1 flex flex-col ${isMobile ? 'bg-black/10 mt-20' : 'p-6 mb-6'}`}>
+            <div className={`flex-1 overflow-y-auto space-y-6 ${isMobile ? 'p-6 pb-4' : 'mb-6'} ${isMobile ? 'min-h-[calc(100vh-280px)]' : 'h-96'}`}>
               {messages.length === 0 ? (
                 <div className="text-center text-white/70 py-12">
-                  <p className={isMobile ? 'text-lg' : ''}>
+                  <p className={isMobile ? 'text-lg px-4' : ''}>
                     {isMobile ? 'Start your therapy session' : 'Select a therapy mode above to begin your session'}
                   </p>
                 </div>
@@ -361,11 +400,11 @@ const Therapy = () => {
                     className={`flex ${message.isUser ? 'justify-end' : 'justify-start'}`}
                   >
                     <div
-                      className={`${isMobile ? 'max-w-[85%]' : 'max-w-sm'} p-4 rounded-lg backdrop-blur-sm ${
+                      className={`${isMobile ? 'max-w-[85%]' : 'max-w-sm'} p-4 rounded-xl backdrop-blur-sm ${
                         message.isUser
                           ? 'bg-primary/80 text-white'
                           : 'bg-white/20 text-white border border-white/30'
-                      }`}
+                      } ${isMobile ? 'mb-4' : ''}`}
                     >
                       <p className={`${isMobile ? 'text-base leading-relaxed' : ''}`}>{message.text}</p>
                       {message.images && message.images.length > 0 && (
@@ -387,7 +426,7 @@ const Therapy = () => {
             </div>
 
             {/* Chat Input */}
-            <div className={`${isMobile ? 'p-6 pt-4 border-t border-white/20' : ''}`}>
+            <div className={`${isMobile ? 'p-6 pt-4 border-t border-white/20 pb-8' : ''}`}>
               <ChatInput
                 inputText={inputText}
                 setInputText={setInputText}
