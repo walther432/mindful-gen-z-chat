@@ -208,7 +208,7 @@ const Therapy = () => {
         throw new Error('No authentication token available');
       }
 
-      const response = await fetch('/api/messages', {
+      const response = await fetch('/api/chat', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
