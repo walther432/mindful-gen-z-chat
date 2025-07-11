@@ -166,7 +166,10 @@ const Therapy = () => {
     if (!inputText.trim()) return;
     
     const maxMessages = isPremium ? 300 : 50;
-    if (messageCount >= maxMessages) return;
+    if (messageCount >= maxMessages) {
+      toast.error(`Daily limit reached! ${isPremium ? 'Premium' : 'Free'} users get ${maxMessages} messages per day.`);
+      return;
+    }
 
     const userInput = inputText.trim();
 
@@ -196,10 +199,38 @@ const Therapy = () => {
       }
     }
 
-    setTimeout(async () => {
+    // Call backend API to get AI response
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      const token = (await supabase.auth.getSession()).data.session?.access_token;
+      
+      if (!token) {
+        throw new Error('No authentication token available');
+      }
+
+      const response = await fetch('/api/messages', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          message: userInput,
+          currentMode: selectedMode,
+          sessionId: currentSession?.id
+        })
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || `API Error: ${response.status}`);
+      }
+
+      const aiData = await response.json();
+      
       const aiResponse: Message = {
         id: (Date.now() + 1).toString(),
-        text: "I hear you, and I want you to know that your feelings are completely valid. Let's explore this together. Can you tell me more about what led to these feelings?",
+        text: aiData.reply,
         isUser: false,
         timestamp: new Date()
       };
@@ -210,7 +241,14 @@ const Therapy = () => {
       if (currentSession) {
         await saveMessageToDatabase(currentSession.id, aiResponse);
       }
-    }, 1500);
+    } catch (error) {
+      console.error('Error getting AI response:', error);
+      toast.error('Failed to get AI response. Please try again.');
+      
+      // Remove the user message if AI response failed
+      setMessages(messages);
+      setMessageCount(prev => prev - 1);
+    }
   };
 
   const selectedModeData = modes.find(mode => mode.id === selectedMode);
