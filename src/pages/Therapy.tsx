@@ -236,6 +236,12 @@ const Therapy = () => {
       }
 
       const aiData = await response.json();
+      console.log('✅ GPT Reply Received:', aiData);
+      
+      if (!aiData.reply) {
+        console.error('❌ No reply field in AI response:', aiData);
+        throw new Error('Invalid AI response structure');
+      }
       
       const aiResponse: Message = {
         id: (Date.now() + 1).toString(),
@@ -251,8 +257,8 @@ const Therapy = () => {
         await saveMessageToDatabase(currentSession.id, aiResponse);
       }
     } catch (error) {
-      console.error('Error getting AI response:', error);
-      toast.error('Failed to get AI response. Please try again.');
+      console.error('❌ Error getting AI response:', error);
+      toast.error('Failed to load reply from AI');
       
       // Remove the user message if AI response failed
       setMessages(messages);
