@@ -5,6 +5,7 @@ import ReflectiveCheckIn from '@/components/therapy/ReflectiveCheckIn';
 import SpotifyIntegration from '@/components/therapy/SpotifyIntegration';
 import TherapySidebar from '@/components/therapy/TherapySidebar';
 import ChatScrollArea from '@/components/therapy/ChatScrollArea';
+import MobileModeSelector from '@/components/therapy/MobileModeSelector';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTherapySessions, TherapySession } from '@/hooks/useTherapySessions';
 import { supabase } from '@/integrations/supabase/client';
@@ -50,6 +51,8 @@ const Therapy = () => {
       color: 'from-purple-500 to-purple-600',
       borderColor: 'border-purple-500',
       bgColor: 'bg-purple-500/10',
+      glowColor: 'shadow-purple-500/30',
+      pulseColor: 'animate-pulse bg-purple-400/20',
       description: 'Process your thoughts and emotions with gentle guidance'
     },
     {
@@ -59,6 +62,8 @@ const Therapy = () => {
       color: 'from-blue-500 to-blue-600',
       borderColor: 'border-blue-500',
       bgColor: 'bg-blue-500/10',
+      glowColor: 'shadow-blue-500/30',
+      pulseColor: 'animate-pulse bg-amber-400/20',
       description: 'Heal from trauma and difficult experiences'
     },
     {
@@ -68,6 +73,8 @@ const Therapy = () => {
       color: 'from-green-500 to-green-600',
       borderColor: 'border-green-500',
       bgColor: 'bg-green-500/10',
+      glowColor: 'shadow-green-500/30',
+      pulseColor: 'animate-pulse bg-green-400/20',
       description: 'Reconstruct your sense of self and relationships'
     },
     {
@@ -77,6 +84,8 @@ const Therapy = () => {
       color: 'from-yellow-500 to-orange-500',
       borderColor: 'border-yellow-500',
       bgColor: 'bg-yellow-500/10',
+      glowColor: 'shadow-yellow-500/30',
+      pulseColor: 'animate-pulse bg-gradient-to-r from-blue-400/20 to-violet-400/20',
       description: 'Grow beyond your current limitations'
     }
   ];
@@ -255,32 +264,28 @@ const Therapy = () => {
 
   return (
     <div className="min-h-screen relative overflow-hidden smooth-scroll">
-      {/* Background and overlays - keep existing code */}
+      {/* Background with Mode-Specific Effects */}
+      <div 
+        className="absolute inset-0 w-full h-full z-[-10] transition-all duration-700 ease-in-out"
+        style={{
+          backgroundImage: `url('${modeToBackgroundImage[selectedMode]}')`,
+          backgroundSize: 'cover',
+          backgroundPosition: 'center',
+          backgroundRepeat: 'no-repeat',
+          filter: isMobile ? 'brightness(0.7) contrast(1.1)' : 'brightness(0.8)'
+        }}
+      />
+      
+      {/* Mobile Enhanced Overlay with Mode Pulse */}
       {isMobile ? (
         <>
-          <div 
-            className="absolute inset-0 w-full h-full z-[-10] transition-all duration-500"
-            style={{
-              backgroundImage: `url('${modeToBackgroundImage[selectedMode]}')`,
-              backgroundSize: 'cover',
-              backgroundPosition: 'center',
-              backgroundRepeat: 'no-repeat'
-            }}
-          />
           <div className="absolute inset-0 bg-black/60 backdrop-blur-[3px] z-[-5]" />
+          <div className={`absolute inset-0 z-[-4] opacity-30 transition-all duration-1000 ${selectedModeData?.pulseColor || ''}`} />
         </>
       ) : (
         <>
-          <div 
-            className="absolute inset-0 w-full h-full z-[-10] transition-all duration-500"
-            style={{
-              backgroundImage: `url('${modeToBackgroundImage[selectedMode]}')`,
-              backgroundSize: 'cover',
-              backgroundPosition: 'center',
-              backgroundRepeat: 'no-repeat'
-            }}
-          />
           <div className="absolute inset-0 bg-black/50 z-[-5]" />
+          <div className={`absolute inset-0 z-[-4] opacity-20 transition-all duration-1000 ${selectedModeData?.pulseColor || ''}`} />
         </>
       )}
       
@@ -309,19 +314,19 @@ const Therapy = () => {
             className="fixed inset-0 bg-black/60 z-50 backdrop-blur-sm"
             onClick={() => setIsMobileSidebarOpen(false)}
           />
-          <div className="fixed left-0 top-0 h-full w-80 z-50 glass-effect border-r border-white/20 backdrop-blur-xl bg-black/20">
-            <div className="p-4 border-b border-white/20 flex items-center justify-between">
+          <div className="fixed left-0 top-0 h-full w-80 z-50 glass-effect border-r border-white/20 backdrop-blur-xl bg-black/30 animate-slide-in-right">
+            <div className="p-4 border-b border-white/20 flex items-center justify-between min-h-[64px]">
               <h2 className="text-white font-semibold text-lg">Sessions</h2>
               <Button
                 variant="ghost"
                 size="sm"
                 onClick={() => setIsMobileSidebarOpen(false)}
-                className="text-white/80 hover:text-white hover:bg-white/10 w-8 h-8 rounded-full"
+                className="text-white/80 hover:text-white hover:bg-white/10 w-9 h-9 rounded-full transition-all duration-200 hover:scale-110"
               >
                 <X size={18} />
               </Button>
             </div>
-            <div className="h-full overflow-hidden">
+            <div className="h-[calc(100%-64px)] overflow-hidden">
               <TherapySidebar 
                 onSessionSelect={handleSessionSelect}
                 currentSessionId={currentSession?.id}
@@ -416,9 +421,9 @@ const Therapy = () => {
               </div>
             )}
 
-            {/* Chat Area with Smooth Scrolling */}
+            {/* Chat Area with Enhanced Mobile Design */}
             <div className={`${isMobile 
-              ? 'rounded-none border-0 bg-black/5 backdrop-blur-md flex-1 flex flex-col' 
+              ? 'rounded-none border-0 bg-black/10 backdrop-blur-md flex-1 flex flex-col pb-24' 
               : 'glass-effect rounded-xl border border-white/30 backdrop-blur-md flex-1 flex flex-col p-8 mb-8 shadow-2xl'
             }`}>
               <ChatScrollArea messages={messages} isMobile={isMobile}>
@@ -488,6 +493,12 @@ const Therapy = () => {
           </div>
         </div>
       </div>
+      
+      {/* Mobile Mode Selector - Bottom Navigation */}
+      <MobileModeSelector 
+        selectedMode={selectedMode}
+        onModeSelect={handleModeSelect}
+      />
     </div>
   );
 };
