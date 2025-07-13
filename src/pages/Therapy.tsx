@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import Navigation from '@/components/ui/navigation';
 import ChatInput from '@/components/therapy/ChatInput';
@@ -37,11 +36,11 @@ const Therapy = () => {
     generateSessionTitle 
   } = useTherapySessions();
   
-  const [selectedMode, setSelectedMode] = useState<TherapyMode>('evolve'); // Default to Evolve mode
+  const [selectedMode, setSelectedMode] = useState<TherapyMode>('evolve');
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputText, setInputText] = useState('');
   const [messageCount, setMessageCount] = useState(0);
-  const [showReflectiveCheckIn, setShowReflectiveCheckIn] = useState(false); // Disabled for mobile focus
+  const [showReflectiveCheckIn, setShowReflectiveCheckIn] = useState(false);
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
 
@@ -119,6 +118,8 @@ const Therapy = () => {
         return;
       }
 
+      console.log('🔐 Auth token obtained, calling getMessages API...');
+
       const response = await fetch(`/supabase/functions/v1/therapy-api?action=getMessages&sessionId=${sessionId}`, {
         method: 'GET',
         headers: {
@@ -127,13 +128,17 @@ const Therapy = () => {
         },
       });
 
+      console.log('📡 getMessages response status:', response.status);
+
       if (!response.ok) {
-        const errorData = await response.json();
-        console.error('Error loading messages:', errorData.error);
+        const errorText = await response.text();
+        console.error('❌ getMessages error response:', errorText);
         return;
       }
 
       const data = await response.json();
+      console.log('📋 getMessages response data:', data);
+      
       const formattedMessages: Message[] = (data.messages || []).map(msg => ({
         id: msg.id,
         text: msg.content,
@@ -141,27 +146,33 @@ const Therapy = () => {
         timestamp: new Date(msg.created_at)
       }));
 
-      console.log('📋 Loaded', formattedMessages.length, 'messages from database');
+      console.log('✅ Loaded', formattedMessages.length, 'messages from database');
       setMessages(formattedMessages);
     } catch (error) {
-      console.error('Error loading messages:', error);
+      console.error('❌ Error loading messages:', error);
+      toast.error('Failed to load messages: ' + error.message);
     }
   };
 
   const handleSessionSelect = (session: TherapySession) => {
+    console.log('🎯 Selecting session:', session.id);
     setCurrentSession(session);
     setIsMobileSidebarOpen(false);
   };
 
   const handleModeSelect = async (mode: TherapyMode) => {
+    console.log('🎛️ Mode selected:', mode);
     setSelectedMode(mode);
     
     if (!currentSession) {
+      console.log('📝 Creating new session for mode:', mode);
       const newSession = await createSession(mode.charAt(0).toUpperCase() + mode.slice(1), 'New Session');
       if (newSession) {
         setMessages([]);
+        console.log('✅ New session created and messages cleared');
       }
     } else {
+      console.log('📝 Updating existing session mode');
       await updateSession(currentSession.id, { mode: mode.charAt(0).toUpperCase() + mode.slice(1) });
     }
   };
@@ -181,7 +192,7 @@ const Therapy = () => {
     }
 
     const userInput = inputText.trim();
-    console.log('📤 Processing user input:', userInput);
+    console.log('📤 Processing user input:', userInput.substring(0, 50) + '...');
 
     const userMessage: Message = {
       id: Date.now().toString(),
@@ -190,10 +201,10 @@ const Therapy = () => {
       timestamp: new Date()
     };
 
-    console.log('➕ Adding user message to UI:', userMessage);
+    console.log('➕ Adding user message to UI');
     setMessages(prevMessages => {
       const updated = [...prevMessages, userMessage];
-      console.log('📝 Updated messages with user message:', updated.length);
+      console.log('📝 Updated messages count:', updated.length);
       return updated;
     });
     
@@ -213,7 +224,7 @@ const Therapy = () => {
       // Create session if this is the first message
       let sessionToUse = currentSession?.id;
       if (!sessionToUse) {
-        console.log('📝 Creating new session...');
+        console.log('📝 Creating new session for first message...');
         
         const newSession = await createSession(selectedMode, generateSessionTitle(userInput));
         if (!newSession) {
@@ -224,6 +235,11 @@ const Therapy = () => {
       }
       
       console.log('🚀 Making API call to send message');
+      console.log('📋 API call details:', {
+        sessionId: sessionToUse,
+        mode: selectedMode,
+        messageLength: userInput.length
+      });
       
       const response = await fetch('/supabase/functions/v1/therapy-api?action=sendMessage', {
         method: 'POST',
@@ -255,7 +271,13 @@ const Therapy = () => {
       }
 
       const aiData = await response.json();
-      console.log('✅ AI response received:', aiData);
+      console.log('✅ AI response received:', {
+        hasReply: !!aiData.reply,
+        replyLength: aiData.reply?.length,
+        mode: aiData.mode,
+        sessionId: aiData.sessionId,
+        remainingMessages: aiData.remainingMessages
+      });
       
       if (!aiData.reply) {
         console.error('❌ No reply field in AI response:', aiData);
@@ -269,7 +291,7 @@ const Therapy = () => {
         timestamp: new Date()
       };
       
-      console.log('🎯 Adding AI response to messages:', aiResponse);
+      console.log('🎯 Adding AI response to messages');
       
       setMessages(prevMessages => {
         const updatedMessages = [...prevMessages, aiResponse];
