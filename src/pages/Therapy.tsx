@@ -207,11 +207,11 @@ const Therapy = () => {
         }}
       />
       
-      {/* Enhanced Mobile Overlay with Glassmorphism */}
+      {/* Enhanced Mobile Overlay with Stable Glassmorphism */}
       {isMobile ? (
         <>
           <div className="absolute inset-0 bg-gradient-to-br from-black/70 via-purple-900/30 to-blue-900/50 backdrop-blur-[2px] z-[-5]" />
-          <div className="absolute inset-0 z-[-4] opacity-20 bg-gradient-to-r from-yellow-400/30 via-purple-400/20 to-blue-400/30 animate-pulse" />
+          <div className="absolute inset-0 z-[-4] opacity-15 bg-gradient-to-r from-yellow-400/20 via-purple-400/15 to-blue-400/20" />
         </>
       ) : (
         <>
@@ -354,6 +354,17 @@ const Therapy = () => {
               </div>
             )}
 
+            {/* Mode Header - Above Chat Area */}
+            {isMobile && (
+              <div className="px-6 py-4 border-b border-white/10">
+                <div className="text-center text-white/90">
+                  <div className="text-4xl mb-2">🟡</div>
+                  <h2 className="text-xl font-bold mb-1">Evolve Mode</h2>
+                  <p className="text-sm text-white/70">Grow beyond your current limitations</p>
+                </div>
+              </div>
+            )}
+
             {/* Chat Area */}
             <div className={`${isMobile 
               ? 'rounded-none border-0 bg-black/5 backdrop-blur-md flex-1 flex flex-col pb-24' 
@@ -362,11 +373,6 @@ const Therapy = () => {
               <ChatScrollArea messages={messages} isMobile={isMobile}>
                 {messages.length === 0 ? (
                   <div className="text-center text-white/90 py-16">
-                    <div className="mb-6">
-                      <div className="text-6xl mb-4">🟡</div>
-                      <h2 className="text-2xl font-bold mb-2">Evolve Mode</h2>
-                      <p className="text-lg text-white/70">Grow beyond your current limitations</p>
-                    </div>
                     <p className={`${isMobile ? 'text-lg px-4' : 'text-xl'} text-white/80`}>
                       {isMobile ? 'Start your evolution journey' : 'Begin your transformation and growth'}
                     </p>
