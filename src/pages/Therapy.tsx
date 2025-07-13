@@ -194,8 +194,8 @@ const Therapy = () => {
       timestamp: new Date()
     };
 
-    const newMessages = [...messages, userMessage];
-    setMessages(newMessages);
+    // Add user message immediately to the UI
+    setMessages(prevMessages => [...prevMessages, userMessage]);
     setInputText('');
     setMessageCount(prev => prev + 1);
 
@@ -217,6 +217,8 @@ const Therapy = () => {
         throw new Error('No authentication token available');
       }
 
+      console.log('🚀 Making API call to /api/chat...');
+      
       const response = await fetch('/api/chat', {
         method: 'POST',
         headers: {
@@ -232,6 +234,7 @@ const Therapy = () => {
 
       if (!response.ok) {
         const errorData = await response.json();
+        console.error('❌ API Error Response:', errorData);
         throw new Error(errorData.error || `API Error: ${response.status}`);
       }
 
@@ -250,18 +253,27 @@ const Therapy = () => {
         timestamp: new Date()
       };
       
-      const updatedMessages = [...newMessages, aiResponse];
-      setMessages(updatedMessages);
+      console.log('🎯 Adding AI response to messages:', aiResponse);
+      
+      // Add AI response to the UI
+      setMessages(prevMessages => {
+        const updatedMessages = [...prevMessages, aiResponse];
+        console.log('📝 Updated messages array:', updatedMessages);
+        return updatedMessages;
+      });
       
       if (currentSession) {
         await saveMessageToDatabase(currentSession.id, aiResponse);
       }
+      
+      console.log('✅ AI response successfully added to UI');
+      
     } catch (error) {
       console.error('❌ Error getting AI response:', error);
       toast.error('Failed to load reply from AI');
       
-      // Remove the user message if AI response failed
-      setMessages(messages);
+      // Remove the user message if AI response failed - but keep the messages that were already there
+      setMessages(prevMessages => prevMessages.slice(0, -1));
       setMessageCount(prev => prev - 1);
     }
   };
