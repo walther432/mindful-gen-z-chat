@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from 'react';
 import Navigation from '@/components/ui/navigation';
 import ChatInput from '@/components/therapy/ChatInput';
@@ -36,11 +37,11 @@ const Therapy = () => {
     generateSessionTitle 
   } = useTherapySessions();
   
-  const [selectedMode, setSelectedMode] = useState<TherapyMode>('reflect');
+  const [selectedMode, setSelectedMode] = useState<TherapyMode>('evolve'); // Default to Evolve mode
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputText, setInputText] = useState('');
   const [messageCount, setMessageCount] = useState(0);
-  const [showReflectiveCheckIn, setShowReflectiveCheckIn] = useState(true);
+  const [showReflectiveCheckIn, setShowReflectiveCheckIn] = useState(false); // Disabled for mobile focus
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
 
@@ -111,18 +112,29 @@ const Therapy = () => {
   const loadMessagesForSession = async (sessionId: string) => {
     try {
       console.log('🔍 Loading messages for session:', sessionId);
-      const { data, error } = await supabase
-        .from('chat_messages')
-        .select('*')
-        .eq('session_id', sessionId)
-        .order('created_at', { ascending: true });
-
-      if (error) {
-        console.error('Error loading messages:', error);
+      const token = (await supabase.auth.getSession()).data.session?.access_token;
+      
+      if (!token) {
+        console.error('❌ No auth token available');
         return;
       }
 
-      const formattedMessages: Message[] = (data || []).map(msg => ({
+      const response = await fetch(`/api/therapy?action=getMessages&sessionId=${sessionId}`, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        console.error('Error loading messages:', errorData.error);
+        return;
+      }
+
+      const data = await response.json();
+      const formattedMessages: Message[] = (data.messages || []).map(msg => ({
         id: msg.id,
         text: msg.content,
         isUser: msg.role === 'user',
@@ -190,79 +202,30 @@ const Therapy = () => {
     setIsLoading(true);
 
     try {
-      const { data: { user } } = await supabase.auth.getUser();
       const token = (await supabase.auth.getSession()).data.session?.access_token;
       
       if (!token) {
         throw new Error('No authentication token available');
       }
 
-      console.log('🔐 Authentication token obtained, length:', token.length);
+      console.log('🔐 Authentication token obtained');
 
       // Create session if this is the first message
       let sessionToUse = currentSession?.id;
       if (!sessionToUse) {
         console.log('📝 Creating new session...');
         
-        try {
-          const sessionResponse = await fetch('/api/createSession', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'Authorization': `Bearer ${token}`
-            },
-            body: JSON.stringify({
-              title: generateSessionTitle(userInput),
-              mode: selectedMode,
-            }),
-          });
-
-          console.log('📡 CreateSession response status:', sessionResponse.status);
-          
-          if (!sessionResponse.ok) {
-            const errorText = await sessionResponse.text();
-            console.error('❌ CreateSession error response:', errorText);
-            
-            let errorData;
-            try {
-              errorData = JSON.parse(errorText);
-            } catch {
-              errorData = { error: errorText };
-            }
-            
-            throw new Error(errorData.error || `HTTP ${sessionResponse.status}: ${errorText}`);
-          }
-          
-          const sessionData = await sessionResponse.json();
-          console.log('✅ Session created successfully:', sessionData);
-          
-          sessionToUse = sessionData.session.id;
-          
-          // Update current session state
-          const newSession: TherapySession = {
-            id: sessionData.session.id,
-            title: sessionData.session.title,
-            mode: sessionData.session.current_mode,
-            created_at: sessionData.session.created_at,
-            updated_at: sessionData.session.created_at,
-            user_id: sessionData.session.user_id
-          };
-          setCurrentSession(newSession);
-          console.log('✅ Session state updated with new session:', sessionToUse);
-          
-        } catch (sessionError) {
-          console.error('❌ Session creation failed:', sessionError);
-          throw new Error(`Failed to create session: ${sessionError.message}`);
+        const newSession = await createSession(selectedMode, generateSessionTitle(userInput));
+        if (!newSession) {
+          throw new Error('Failed to create session');
         }
+        sessionToUse = newSession.id;
+        console.log('✅ Session created:', sessionToUse);
       }
       
-      console.log('🚀 Making API call to /api/sendMessage with:', {
-        message: userInput,
-        sessionId: sessionToUse,
-        mode: selectedMode
-      });
+      console.log('🚀 Making API call to send message');
       
-      const response = await fetch('/api/sendMessage', {
+      const response = await fetch('/api/therapy?action=sendMessage', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -308,28 +271,19 @@ const Therapy = () => {
       
       console.log('🎯 Adding AI response to messages:', aiResponse);
       
-      // Add AI response to the UI
       setMessages(prevMessages => {
         const updatedMessages = [...prevMessages, aiResponse];
         console.log('📝 Final messages array length:', updatedMessages.length);
-        console.log('📝 Last message (should be AI):', updatedMessages[updatedMessages.length - 1]);
         return updatedMessages;
       });
-      
-      // Update remaining message count
-      if (aiData.remainingMessages !== undefined) {
-        console.log('📊 Remaining messages:', aiData.remainingMessages);
-      }
       
       console.log('✅ AI response successfully added to UI');
       
     } catch (error) {
       console.error('❌ Error in handleSendMessage:', error);
-      console.error('❌ Error stack:', error.stack);
       
       toast.error('Failed to get AI response: ' + error.message);
       
-      // Remove the user message if AI response failed
       setMessages(prevMessages => {
         console.log('🔄 Removing last user message due to error');
         return prevMessages.slice(0, -1);
@@ -344,23 +298,23 @@ const Therapy = () => {
 
   return (
     <div className="min-h-screen relative overflow-hidden smooth-scroll">
-      {/* Background with Mode-Specific Effects */}
+      {/* Background with Evolve Mode Effects for Mobile */}
       <div 
         className="absolute inset-0 w-full h-full z-[-10] transition-all duration-700 ease-in-out"
         style={{
-          backgroundImage: `url('${modeToBackgroundImage[selectedMode]}')`,
+          backgroundImage: `url('${modeToBackgroundImage[isMobile ? 'evolve' : selectedMode]}')`,
           backgroundSize: 'cover',
           backgroundPosition: 'center',
           backgroundRepeat: 'no-repeat',
-          filter: isMobile ? 'brightness(0.7) contrast(1.1)' : 'brightness(0.8)'
+          filter: isMobile ? 'brightness(0.4) contrast(1.2)' : 'brightness(0.8)'
         }}
       />
       
-      {/* Mobile Enhanced Overlay with Mode Pulse */}
+      {/* Enhanced Mobile Overlay with Glassmorphism */}
       {isMobile ? (
         <>
-          <div className="absolute inset-0 bg-black/60 backdrop-blur-[3px] z-[-5]" />
-          <div className={`absolute inset-0 z-[-4] opacity-30 transition-all duration-1000 ${selectedModeData?.pulseColor || ''}`} />
+          <div className="absolute inset-0 bg-gradient-to-br from-black/70 via-purple-900/30 to-blue-900/50 backdrop-blur-[2px] z-[-5]" />
+          <div className="absolute inset-0 z-[-4] opacity-20 bg-gradient-to-r from-yellow-400/30 via-purple-400/20 to-blue-400/30 animate-pulse" />
         </>
       ) : (
         <>
@@ -370,15 +324,17 @@ const Therapy = () => {
       )}
       
       {/* Desktop Sidebar - Hidden on Mobile */}
-      <div className="hidden lg:block">
-        <TherapySidebar 
-          onSessionSelect={handleSessionSelect}
-          currentSessionId={currentSession?.id}
-        />
-      </div>
+      {!isMobile && (
+        <div className="hidden lg:block">
+          <TherapySidebar 
+            onSessionSelect={handleSessionSelect}
+            currentSessionId={currentSession?.id}
+          />
+        </div>
+      )}
 
-      {/* Mobile Sidebar Toggle - Floating Button */}
-      {isMobile && (
+      {/* Mobile Sidebar Toggle - Only show if not in full-screen chat mode */}
+      {isMobile && messages.length === 0 && (
         <Button
           onClick={() => setIsMobileSidebarOpen(true)}
           className="fixed top-6 left-4 z-40 w-12 h-12 rounded-full glass-effect border border-white/20 backdrop-blur-xl bg-black/20 text-white hover:bg-black/30 transition-all duration-200 shadow-lg"
@@ -417,21 +373,23 @@ const Therapy = () => {
       )}
       
       {/* Main Content */}
-      <div className={`${isMobile ? '' : 'lg:ml-80'} transition-all duration-300 min-h-screen flex flex-col smooth-scroll`}>
+      <div className={`${!isMobile ? 'lg:ml-80' : ''} transition-all duration-300 min-h-screen flex flex-col smooth-scroll`}>
         {/* Navigation - Desktop only */}
-        <div className="hidden lg:block">
-          <Navigation />
-        </div>
+        {!isMobile && (
+          <div className="hidden lg:block">
+            <Navigation />
+          </div>
+        )}
         
-        {/* Mobile Top Bar */}
+        {/* Mobile Top Bar - Simplified */}
         {isMobile && (
-          <div className="fixed top-0 left-0 right-0 z-30 glass-effect border-b border-white/10 backdrop-blur-xl bg-black/10">
+          <div className="fixed top-0 left-0 right-0 z-30 glass-effect border-b border-white/10 backdrop-blur-xl bg-black/20">
             <div className="flex items-center justify-between px-6 py-4">
-              <div className="w-12" />
+              <div className="w-8" />
               <h1 className="text-lg font-bold text-white truncate flex-1 text-center">
-                {currentSession ? currentSession.title : 'Therapy'}
+                Evolve Mode
               </h1>
-              <SpotifyIntegration mode={selectedMode} />
+              <SpotifyIntegration mode="evolve" />
             </div>
           </div>
         )}
@@ -442,7 +400,7 @@ const Therapy = () => {
         )}
         
         <div className={`flex-1 flex flex-col ${isMobile ? 'pt-20' : ''} relative`}>
-          {/* Desktop Container with Optimized Width */}
+          {/* Desktop Container */}
           <div className={`${isMobile ? 'px-0' : 'max-w-7xl mx-auto w-full px-8 py-8 2xl:max-w-[1400px]'} flex-1 flex flex-col`}>
             {/* Premium Status Banner - Desktop only */}
             {!isMobile && isPremium && (
@@ -467,7 +425,6 @@ const Therapy = () => {
                   <SpotifyIntegration mode={selectedMode} />
                 </div>
                 
-                {/* Desktop Mode Grid - Better Spacing */}
                 <div className="grid grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
                   {modes.map((mode) => (
                     <button
@@ -486,7 +443,6 @@ const Therapy = () => {
                   ))}
                 </div>
 
-                {/* Selected Mode Banner */}
                 {selectedModeData && (
                   <div className={`p-6 rounded-xl border backdrop-blur-sm ${selectedModeData.borderColor} ${selectedModeData.bgColor} mb-8 border-opacity-70 shadow-lg`}>
                     <div className="flex items-center space-x-4">
@@ -501,16 +457,21 @@ const Therapy = () => {
               </div>
             )}
 
-            {/* Chat Area with Enhanced Mobile Design */}
+            {/* Chat Area with Full-Screen Mobile Design */}
             <div className={`${isMobile 
-              ? 'rounded-none border-0 bg-black/10 backdrop-blur-md flex-1 flex flex-col pb-24' 
+              ? 'rounded-none border-0 bg-black/5 backdrop-blur-md flex-1 flex flex-col pb-24' 
               : 'glass-effect rounded-xl border border-white/30 backdrop-blur-md flex-1 flex flex-col p-8 mb-8 shadow-2xl'
             }`}>
               <ChatScrollArea messages={messages} isMobile={isMobile}>
                 {messages.length === 0 ? (
-                  <div className="text-center text-white/70 py-16">
-                    <p className={`${isMobile ? 'text-lg px-4' : 'text-xl'}`}>
-                      {isMobile ? 'Start your therapy session' : 'Select a therapy mode above to begin your session'}
+                  <div className="text-center text-white/90 py-16">
+                    <div className="mb-6">
+                      <div className="text-6xl mb-4">🟡</div>
+                      <h2 className="text-2xl font-bold mb-2">Evolve Mode</h2>
+                      <p className="text-lg text-white/70">Grow beyond your current limitations</p>
+                    </div>
+                    <p className={`${isMobile ? 'text-lg px-4' : 'text-xl'} text-white/80`}>
+                      {isMobile ? 'Start your evolution journey' : 'Begin your transformation and growth'}
                     </p>
                   </div>
                 ) : (
@@ -522,18 +483,11 @@ const Therapy = () => {
                       <div
                         className={`${isMobile ? 'max-w-[85%]' : 'max-w-2xl'} p-5 rounded-2xl backdrop-blur-sm ${
                           message.isUser
-                            ? 'bg-primary/80 text-white shadow-lg border border-white/10'
-                            : 'bg-white/15 text-white border border-white/20 shadow-lg'
+                            ? 'bg-gradient-to-r from-yellow-500/80 to-orange-500/80 text-white shadow-lg border border-white/10'
+                            : 'bg-white/20 text-white border border-white/30 shadow-lg'
                         }`}
                       >
                         <p className={`${isMobile ? 'text-base leading-relaxed' : 'text-base leading-relaxed'}`}>{message.text}</p>
-                        {message.images && message.images.length > 0 && (
-                          <div className="mt-3 space-y-2">
-                            {message.images.map((img, idx) => (
-                              <img key={idx} src={img} alt="Upload" className="max-w-full rounded-lg" />
-                            ))}
-                          </div>
-                        )}
                         <p className={`text-xs mt-3 ${
                           message.isUser ? 'text-white/70' : 'text-white/60'
                         }`}>
@@ -544,10 +498,9 @@ const Therapy = () => {
                   ))
                 )}
                 
-                {/* Loading indicator */}
                 {isLoading && (
                   <div className="flex justify-start mb-4">
-                    <div className="bg-white/15 text-white border border-white/20 shadow-lg p-5 rounded-2xl">
+                    <div className="bg-white/20 text-white border border-white/30 shadow-lg p-5 rounded-2xl">
                       <div className="flex items-center space-x-2">
                         <div className="animate-pulse">Thinking...</div>
                         <div className="flex space-x-1">
@@ -561,7 +514,6 @@ const Therapy = () => {
                 )}
               </ChatScrollArea>
 
-              {/* Chat Input */}
               <div className={`${isMobile ? 'p-6 pt-4 border-t border-white/10 pb-8' : ''}`}>
                 <ChatInput
                   inputText={inputText}
@@ -590,11 +542,13 @@ const Therapy = () => {
         </div>
       </div>
       
-      {/* Mobile Mode Selector - Bottom Navigation */}
-      <MobileModeSelector 
-        selectedMode={selectedMode}
-        onModeSelect={handleModeSelect}
-      />
+      {/* Mobile Mode Selector - Only show when no active conversation */}
+      {isMobile && messages.length === 0 && (
+        <MobileModeSelector 
+          selectedMode={selectedMode}
+          onModeSelect={handleModeSelect}
+        />
+      )}
     </div>
   );
 };
