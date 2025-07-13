@@ -281,11 +281,33 @@ const Therapy = () => {
         return updatedMessages;
       });
       
-      // Update session data if returned from backend
+      // Update session data if returned from backend - CRITICAL FIX
       if (aiData.sessionId && !currentSession) {
-        console.log('🆔 Session created by backend:', aiData.sessionId);
-        // Refresh sessions list to get the new session
-        // The useTherapySessions hook will handle this
+        console.log('🆔 Session created by backend, fetching session data:', aiData.sessionId);
+        
+        // Fetch the newly created session from database
+        try {
+          const { data: sessionData, error: sessionError } = await supabase
+            .from('chat_sessions')
+            .select('*')
+            .eq('id', aiData.sessionId)
+            .single();
+            
+          if (!sessionError && sessionData) {
+            const newSession: TherapySession = {
+              id: sessionData.id,
+              title: sessionData.title,
+              mode: sessionData.current_mode,
+              created_at: sessionData.created_at,
+              updated_at: sessionData.created_at,
+              user_id: sessionData.user_id
+            };
+            setCurrentSession(newSession);
+            console.log('✅ Session updated in frontend:', newSession);
+          }
+        } catch (err) {
+          console.error('❌ Error fetching session data:', err);
+        }
       }
       
       // Update remaining message count
