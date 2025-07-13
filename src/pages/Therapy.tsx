@@ -31,6 +31,31 @@ interface Message {
 const Therapy = () => {
   const { user, isPremium } = useAuth();
   const isMobile = useIsMobile();
+
+  // Helper function to get user message background based on therapy mode
+  const getUserMessageBackground = (mode: string) => {
+    const modeColors = {
+      reflect: 'text-white shadow-lg border border-white/10',
+      recover: 'text-white shadow-lg border border-white/10', 
+      rebuild: 'text-white shadow-lg border border-white/10',
+      evolve: 'text-white shadow-lg border border-white/10'
+    };
+    
+    const baseClasses = modeColors[mode as keyof typeof modeColors] || modeColors.reflect;
+    
+    switch(mode) {
+      case 'reflect':
+        return `bg-[hsl(var(--therapy-reflect))] ${baseClasses}`;
+      case 'recover':
+        return `bg-[hsl(var(--therapy-recover))] ${baseClasses}`;
+      case 'rebuild':
+        return `bg-[hsl(var(--therapy-rebuild))] ${baseClasses}`;
+      case 'evolve':
+        return `bg-[hsl(var(--therapy-evolve))] ${baseClasses}`;
+      default:
+        return `bg-[hsl(var(--therapy-reflect))] ${baseClasses}`;
+    }
+  };
   
   // Disabled Supabase hooks - keep for UI compatibility
   const stats = { messagesUsedToday: 0, remainingMessages: 50, totalSessions: 0, isPremium: false };
@@ -423,7 +448,7 @@ const Therapy = () => {
                             ? 'px-4 py-2 bg-gradient-to-r from-purple-500/40 to-blue-500/40 border border-purple-400/50 text-purple-100 text-sm rounded-full'
                             : `${isMobile ? 'max-w-[85%]' : 'max-w-2xl'} p-5 rounded-2xl backdrop-blur-sm ${
                                 message.isUser
-                                  ? 'bg-gradient-to-r from-yellow-500/80 to-orange-500/80 text-white shadow-lg border border-white/10'
+                                  ? getUserMessageBackground(currentDetectedMode || selectedMode)
                                   : 'bg-white/20 text-white border border-white/30 shadow-lg'
                               }`
                         }`}
