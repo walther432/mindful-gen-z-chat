@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from 'react';
 import Navigation from '@/components/ui/navigation';
 import ChatInput from '@/components/therapy/ChatInput';
@@ -8,6 +9,7 @@ import ChatScrollArea from '@/components/therapy/ChatScrollArea';
 import MobileModeSelector from '@/components/therapy/MobileModeSelector';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTherapySessions, TherapySession } from '@/hooks/useTherapySessions';
+import { useUserStats } from '@/hooks/useUserStats';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { useIsMobile } from '@/hooks/use-mobile';
@@ -25,8 +27,9 @@ interface Message {
 }
 
 const Therapy = () => {
-  const { isPremium } = useAuth();
+  const { user, isPremium } = useAuth();
   const isMobile = useIsMobile();
+  const { stats, refetch: refetchStats } = useUserStats();
   const { 
     sessions, 
     currentSession, 
@@ -39,7 +42,6 @@ const Therapy = () => {
   const [selectedMode, setSelectedMode] = useState<TherapyMode>('evolve');
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputText, setInputText] = useState('');
-  const [messageCount, setMessageCount] = useState(0);
   const [showReflectiveCheckIn, setShowReflectiveCheckIn] = useState(false);
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
@@ -109,12 +111,18 @@ const Therapy = () => {
   }, [currentSession]);
 
   const loadMessagesForSession = async (sessionId: string) => {
+    if (!user) {
+      console.error('❌ No user available for loading messages');
+      return;
+    }
+
     try {
       console.log('🔍 Loading messages for session:', sessionId);
       const token = (await supabase.auth.getSession()).data.session?.access_token;
       
       if (!token) {
         console.error('❌ No auth token available');
+        toast.error('Authentication required');
         return;
       }
 
@@ -126,9 +134,12 @@ const Therapy = () => {
         },
       });
 
+      console.log('📡 getMessages response status:', response.status);
+
       if (!response.ok) {
         const errorText = await response.text();
         console.error('❌ getMessages error response:', errorText);
+        toast.error('Failed to load message history');
         return;
       }
 
@@ -146,7 +157,7 @@ const Therapy = () => {
       setMessages(formattedMessages);
     } catch (error) {
       console.error('❌ Error loading messages:', error);
-      toast.error('Failed to load messages: ' + error.message);
+      toast.error('Failed to load messages: ' + (error instanceof Error ? error.message : 'Unknown error'));
     }
   };
 
@@ -174,15 +185,24 @@ const Therapy = () => {
   };
 
   const handleSendMessage = async () => {
-    console.log('🚀 handleSendMessage called with inputText:', inputText?.substring(0, 50) + '...');
+    console.log('🚀 handleSendMessage called');
+    console.log('📝 Input text:', inputText?.substring(0, 50) + '...');
+    console.log('👤 User:', user?.id);
+    console.log('📊 Stats:', stats);
     
+    if (!user) {
+      console.error('❌ No user authenticated');
+      toast.error('Please log in to send messages');
+      return;
+    }
+
     if (!inputText?.trim()) {
       console.log('❌ Empty input text, returning early');
       return;
     }
     
     const maxMessages = isPremium ? 300 : 50;
-    if (messageCount >= maxMessages) {
+    if (stats.messagesUsedToday >= maxMessages) {
       toast.error(`Daily limit reached! ${isPremium ? 'Premium' : 'Free'} users get ${maxMessages} messages per day.`);
       return;
     }
@@ -222,6 +242,11 @@ const Therapy = () => {
       }
 
       console.log('🚀 Making API call to send message');
+      console.log('📋 Request payload:', {
+        message: userInput.substring(0, 50) + '...',
+        sessionId: sessionToUse.id,
+        mode: selectedMode
+      });
       
       const response = await fetch('https://tvjqpmxugitehucwhdbk.supabase.co/functions/v1/therapy-api?action=sendMessage', {
         method: 'POST',
@@ -237,6 +262,7 @@ const Therapy = () => {
       });
 
       console.log('📡 SendMessage response status:', response.status);
+      console.log('📡 SendMessage response headers:', [...response.headers.entries()]);
 
       if (!response.ok) {
         const errorText = await response.text();
@@ -256,7 +282,9 @@ const Therapy = () => {
       console.log('✅ AI response received:', {
         hasReply: !!aiData.reply,
         replyLength: aiData.reply?.length,
-        remainingMessages: aiData.remainingMessages
+        remainingMessages: aiData.remainingMessages,
+        mode: aiData.mode,
+        sessionId: aiData.sessionId
       });
       
       if (!aiData.reply) {
@@ -271,13 +299,26 @@ const Therapy = () => {
       };
       
       setMessages(prevMessages => [...prevMessages, aiResponse]);
-      setMessageCount(prev => prev + 1);
+      
+      // Refresh user stats
+      await refetchStats();
       
       console.log('✅ Message exchange completed successfully');
       
     } catch (error) {
       console.error('❌ Error in handleSendMessage:', error);
-      toast.error('Failed to get AI response: ' + error.message);
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+      
+      // Show specific error messages
+      if (errorMessage.includes('Daily limit')) {
+        toast.error('Daily message limit reached. Please upgrade to premium for more messages.');
+      } else if (errorMessage.includes('Invalid authentication')) {
+        toast.error('Authentication failed. Please log in again.');
+      } else if (errorMessage.includes('Failed to create session')) {
+        toast.error('Unable to create chat session. Please try again.');
+      } else {
+        toast.error('Failed to get AI response: ' + errorMessage);
+      }
       
       // Remove user message from UI on error
       setMessages(prevMessages => prevMessages.slice(0, -1));
@@ -287,6 +328,18 @@ const Therapy = () => {
   };
 
   const selectedModeData = modes.find(mode => mode.id === selectedMode);
+
+  // Show loading or auth required states
+  if (!user) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-gray-900 to-gray-800">
+        <div className="text-center text-white">
+          <h2 className="text-2xl font-bold mb-4">Authentication Required</h2>
+          <p>Please log in to access the therapy chat.</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen relative overflow-hidden smooth-scroll">
@@ -512,7 +565,7 @@ const Therapy = () => {
                   setInputText={setInputText}
                   onSendMessage={handleSendMessage}
                   disabled={isLoading}
-                  messageCount={messageCount}
+                  messageCount={stats.messagesUsedToday}
                 />
               </div>
             </div>
