@@ -154,7 +154,6 @@ const Therapy = () => {
     }
   };
 
-
   const handleSendMessage = async () => {
     console.log('🔥 handleSendMessage called with inputText:', inputText);
     
@@ -171,11 +170,6 @@ const Therapy = () => {
 
     const userInput = inputText.trim();
     console.log('📤 Processing user input:', userInput);
-
-    // Create session if needed - Let backend handle this
-    if (!currentSession) {
-      console.log('📝 No current session - backend will create one');
-    }
 
     const userMessage: Message = {
       id: Date.now().toString(),
@@ -195,9 +189,6 @@ const Therapy = () => {
     setMessageCount(prev => prev + 1);
     setIsLoading(true);
 
-    
-
-    // Call backend API to get AI response
     try {
       const { data: { user } } = await supabase.auth.getUser();
       const token = (await supabase.auth.getSession()).data.session?.access_token;
@@ -206,44 +197,66 @@ const Therapy = () => {
         throw new Error('No authentication token available');
       }
 
+      console.log('🔐 Authentication token obtained, length:', token.length);
+
       // Create session if this is the first message
       let sessionToUse = currentSession?.id;
       if (!sessionToUse) {
         console.log('📝 Creating new session...');
-        const sessionResponse = await fetch('/api/createSession', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${token}`
-          },
-          body: JSON.stringify({
-            title: generateSessionTitle(userInput),
-            mode: selectedMode,
-          }),
-        });
         
-        if (!sessionResponse.ok) {
-          const errorData = await sessionResponse.json();
-          throw new Error(errorData.error || 'Failed to create session');
+        try {
+          const sessionResponse = await fetch('/api/createSession', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${token}`
+            },
+            body: JSON.stringify({
+              title: generateSessionTitle(userInput),
+              mode: selectedMode,
+            }),
+          });
+
+          console.log('📡 CreateSession response status:', sessionResponse.status);
+          
+          if (!sessionResponse.ok) {
+            const errorText = await sessionResponse.text();
+            console.error('❌ CreateSession error response:', errorText);
+            
+            let errorData;
+            try {
+              errorData = JSON.parse(errorText);
+            } catch {
+              errorData = { error: errorText };
+            }
+            
+            throw new Error(errorData.error || `HTTP ${sessionResponse.status}: ${errorText}`);
+          }
+          
+          const sessionData = await sessionResponse.json();
+          console.log('✅ Session created successfully:', sessionData);
+          
+          sessionToUse = sessionData.session.id;
+          
+          // Update current session state
+          const newSession: TherapySession = {
+            id: sessionData.session.id,
+            title: sessionData.session.title,
+            mode: sessionData.session.current_mode,
+            created_at: sessionData.session.created_at,
+            updated_at: sessionData.session.created_at,
+            user_id: sessionData.session.user_id
+          };
+          setCurrentSession(newSession);
+          console.log('✅ Session state updated with new session:', sessionToUse);
+          
+        } catch (sessionError) {
+          console.error('❌ Session creation failed:', sessionError);
+          throw new Error(`Failed to create session: ${sessionError.message}`);
         }
-        
-        const sessionData = await sessionResponse.json();
-        sessionToUse = sessionData.session.id;
-        
-        // Update current session state
-        const newSession: TherapySession = {
-          id: sessionData.session.id,
-          title: sessionData.session.title,
-          mode: sessionData.session.current_mode,
-          created_at: sessionData.session.created_at,
-          updated_at: sessionData.session.created_at,
-          user_id: sessionData.session.user_id
-        };
-        setCurrentSession(newSession);
-        console.log('✅ New session created:', sessionToUse);
       }
       
-      console.log('🚀 Making API call to /api/sendMessage with payload:', {
+      console.log('🚀 Making API call to /api/sendMessage with:', {
         message: userInput,
         sessionId: sessionToUse,
         mode: selectedMode
@@ -262,16 +275,24 @@ const Therapy = () => {
         })
       });
 
-      console.log('📡 API Response status:', response.status);
+      console.log('📡 SendMessage response status:', response.status);
 
       if (!response.ok) {
-        const errorData = await response.json();
-        console.error('❌ API Error Response:', errorData);
-        throw new Error(errorData.error || `API Error: ${response.status}`);
+        const errorText = await response.text();
+        console.error('❌ SendMessage error response:', errorText);
+        
+        let errorData;
+        try {
+          errorData = JSON.parse(errorText);
+        } catch {
+          errorData = { error: errorText };
+        }
+        
+        throw new Error(errorData.error || `HTTP ${response.status}: ${errorText}`);
       }
 
       const aiData = await response.json();
-      console.log('✅ Full AI Response received:', aiData);
+      console.log('✅ AI response received:', aiData);
       
       if (!aiData.reply) {
         console.error('❌ No reply field in AI response:', aiData);
@@ -286,7 +307,6 @@ const Therapy = () => {
       };
       
       console.log('🎯 Adding AI response to messages:', aiResponse);
-      console.log('🎯 GPT Reply Received:', aiData.reply);
       
       // Add AI response to the UI
       setMessages(prevMessages => {
@@ -295,7 +315,6 @@ const Therapy = () => {
         console.log('📝 Last message (should be AI):', updatedMessages[updatedMessages.length - 1]);
         return updatedMessages;
       });
-      
       
       // Update remaining message count
       if (aiData.remainingMessages !== undefined) {
@@ -306,6 +325,8 @@ const Therapy = () => {
       
     } catch (error) {
       console.error('❌ Error in handleSendMessage:', error);
+      console.error('❌ Error stack:', error.stack);
+      
       toast.error('Failed to get AI response: ' + error.message);
       
       // Remove the user message if AI response failed
