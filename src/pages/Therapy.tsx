@@ -119,7 +119,7 @@ const Therapy = () => {
         return;
       }
 
-      const response = await fetch(`/api/therapy?action=getMessages&sessionId=${sessionId}`, {
+      const response = await fetch(`/supabase/functions/v1/therapy-api?action=getMessages&sessionId=${sessionId}`, {
         method: 'GET',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -225,7 +225,7 @@ const Therapy = () => {
       
       console.log('🚀 Making API call to send message');
       
-      const response = await fetch('/api/therapy?action=sendMessage', {
+      const response = await fetch('/supabase/functions/v1/therapy-api?action=sendMessage', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
