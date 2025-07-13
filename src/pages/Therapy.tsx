@@ -42,6 +42,7 @@ const Therapy = () => {
   const [messageCount, setMessageCount] = useState(0);
   const [showReflectiveCheckIn, setShowReflectiveCheckIn] = useState(true);
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
 
   const modes = [
     {
@@ -172,7 +173,12 @@ const Therapy = () => {
   };
 
   const handleSendMessage = async () => {
-    if (!inputText.trim()) return;
+    console.log('🔥 handleSendMessage called with inputText:', inputText);
+    
+    if (!inputText.trim()) {
+      console.log('❌ Empty input text, returning early');
+      return;
+    }
     
     const maxMessages = isPremium ? 300 : 50;
     if (messageCount >= maxMessages) {
@@ -181,10 +187,16 @@ const Therapy = () => {
     }
 
     const userInput = inputText.trim();
+    console.log('📤 Processing user input:', userInput);
 
+    // Create session if needed
     if (!currentSession) {
+      console.log('📝 Creating new session...');
       const newSession = await createSession('Reflect', 'New Session');
-      if (!newSession) return;
+      if (!newSession) {
+        console.error('❌ Failed to create session');
+        return;
+      }
     }
 
     const userMessage: Message = {
@@ -194,14 +206,22 @@ const Therapy = () => {
       timestamp: new Date()
     };
 
-    // Add user message immediately to the UI
-    setMessages(prevMessages => [...prevMessages, userMessage]);
+    console.log('➕ Adding user message to UI:', userMessage);
+    setMessages(prevMessages => {
+      const updated = [...prevMessages, userMessage];
+      console.log('📝 Updated messages with user message:', updated.length);
+      return updated;
+    });
+    
     setInputText('');
     setMessageCount(prev => prev + 1);
+    setIsLoading(true);
 
+    // Save user message to database
     if (currentSession) {
       await saveMessageToDatabase(currentSession.id, userMessage);
       
+      // Update session title if it's the first message
       if (messages.length <= 1) {
         const newTitle = generateSessionTitle(userInput);
         await updateSession(currentSession.id, { title: newTitle });
@@ -217,7 +237,11 @@ const Therapy = () => {
         throw new Error('No authentication token available');
       }
 
-      console.log('🚀 Making API call to /api/chat...');
+      console.log('🚀 Making API call to /api/chat with payload:', {
+        message: userInput,
+        currentMode: selectedMode,
+        sessionId: currentSession?.id
+      });
       
       const response = await fetch('/api/chat', {
         method: 'POST',
@@ -232,6 +256,8 @@ const Therapy = () => {
         })
       });
 
+      console.log('📡 API Response status:', response.status);
+
       if (!response.ok) {
         const errorData = await response.json();
         console.error('❌ API Error Response:', errorData);
@@ -239,11 +265,11 @@ const Therapy = () => {
       }
 
       const aiData = await response.json();
-      console.log('✅ GPT Reply Received:', aiData);
+      console.log('✅ Full AI Response received:', aiData);
       
       if (!aiData.reply) {
         console.error('❌ No reply field in AI response:', aiData);
-        throw new Error('Invalid AI response structure');
+        throw new Error('Invalid AI response structure - missing reply field');
       }
       
       const aiResponse: Message = {
@@ -258,23 +284,30 @@ const Therapy = () => {
       // Add AI response to the UI
       setMessages(prevMessages => {
         const updatedMessages = [...prevMessages, aiResponse];
-        console.log('📝 Updated messages array:', updatedMessages);
+        console.log('📝 Final messages array length:', updatedMessages.length);
+        console.log('📝 Last message (should be AI):', updatedMessages[updatedMessages.length - 1]);
         return updatedMessages;
       });
       
+      // Save AI response to database
       if (currentSession) {
         await saveMessageToDatabase(currentSession.id, aiResponse);
       }
       
-      console.log('✅ AI response successfully added to UI');
+      console.log('✅ AI response successfully added to UI and database');
       
     } catch (error) {
-      console.error('❌ Error getting AI response:', error);
-      toast.error('Failed to load reply from AI');
+      console.error('❌ Error in handleSendMessage:', error);
+      toast.error('Failed to get AI response: ' + error.message);
       
-      // Remove the user message if AI response failed - but keep the messages that were already there
-      setMessages(prevMessages => prevMessages.slice(0, -1));
+      // Remove the user message if AI response failed
+      setMessages(prevMessages => {
+        console.log('🔄 Removing last user message due to error');
+        return prevMessages.slice(0, -1);
+      });
       setMessageCount(prev => prev - 1);
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -455,14 +488,14 @@ const Therapy = () => {
                   messages.map((message) => (
                     <div
                       key={message.id}
-                      className={`flex ${message.isUser ? 'justify-end' : 'justify-start'}`}
+                      className={`flex ${message.isUser ? 'justify-end' : 'justify-start'} mb-4`}
                     >
                       <div
                         className={`${isMobile ? 'max-w-[85%]' : 'max-w-2xl'} p-5 rounded-2xl backdrop-blur-sm ${
                           message.isUser
                             ? 'bg-primary/80 text-white shadow-lg border border-white/10'
                             : 'bg-white/15 text-white border border-white/20 shadow-lg'
-                        } ${isMobile ? 'mb-4' : ''}`}
+                        }`}
                       >
                         <p className={`${isMobile ? 'text-base leading-relaxed' : 'text-base leading-relaxed'}`}>{message.text}</p>
                         {message.images && message.images.length > 0 && (
@@ -481,6 +514,22 @@ const Therapy = () => {
                     </div>
                   ))
                 )}
+                
+                {/* Loading indicator */}
+                {isLoading && (
+                  <div className="flex justify-start mb-4">
+                    <div className="bg-white/15 text-white border border-white/20 shadow-lg p-5 rounded-2xl">
+                      <div className="flex items-center space-x-2">
+                        <div className="animate-pulse">Thinking...</div>
+                        <div className="flex space-x-1">
+                          <div className="w-2 h-2 bg-white/60 rounded-full animate-bounce"></div>
+                          <div className="w-2 h-2 bg-white/60 rounded-full animate-bounce" style={{animationDelay: '0.1s'}}></div>
+                          <div className="w-2 h-2 bg-white/60 rounded-full animate-bounce" style={{animationDelay: '0.2s'}}></div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
               </ChatScrollArea>
 
               {/* Chat Input */}
@@ -489,7 +538,7 @@ const Therapy = () => {
                   inputText={inputText}
                   setInputText={setInputText}
                   onSendMessage={handleSendMessage}
-                  disabled={false}
+                  disabled={isLoading}
                   messageCount={messageCount}
                 />
               </div>
