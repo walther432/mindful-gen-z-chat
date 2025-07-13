@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import Navigation from '@/components/ui/navigation';
 import ChatInput from '@/components/therapy/ChatInput';
@@ -119,8 +118,6 @@ const Therapy = () => {
         return;
       }
 
-      console.log('🔐 Auth token obtained, calling getMessages API...');
-
       const response = await fetch(`https://tvjqpmxugitehucwhdbk.supabase.co/functions/v1/therapy-api?action=getMessages&sessionId=${sessionId}`, {
         method: 'GET',
         headers: {
@@ -128,8 +125,6 @@ const Therapy = () => {
           'Content-Type': 'application/json',
         },
       });
-
-      console.log('📡 getMessages response status:', response.status);
 
       if (!response.ok) {
         const errorText = await response.text();
@@ -194,11 +189,20 @@ const Therapy = () => {
 
     const userInput = inputText.trim();
     console.log('📤 Processing user input:', userInput.substring(0, 50) + '...');
-    console.log('🔢 Current message count:', messageCount);
 
-    // Clear input immediately
+    // Clear input and set loading state
     setInputText('');
     setIsLoading(true);
+
+    // Add user message to UI immediately
+    const userMessage: Message = {
+      id: Date.now().toString(),
+      text: userInput,
+      isUser: true,
+      timestamp: new Date()
+    };
+    
+    setMessages(prevMessages => [...prevMessages, userMessage]);
 
     try {
       const token = (await supabase.auth.getSession()).data.session?.access_token;
@@ -207,43 +211,17 @@ const Therapy = () => {
         throw new Error('No authentication token available');
       }
 
-      console.log('🔐 Authentication token obtained');
-
       // Create session if this is the first message
       let sessionToUse = currentSession;
       if (!sessionToUse) {
         console.log('📝 Creating new session for first message...');
-        
-        const newSession = await createSession(selectedMode, generateSessionTitle(userInput));
-        if (!newSession) {
+        sessionToUse = await createSession(selectedMode, generateSessionTitle(userInput));
+        if (!sessionToUse) {
           throw new Error('Failed to create session');
         }
-        sessionToUse = newSession;
-        console.log('✅ Session created:', sessionToUse.id);
       }
 
       console.log('🚀 Making API call to send message');
-      console.log('📋 API call details:', {
-        sessionId: sessionToUse.id,
-        mode: selectedMode,
-        messageLength: userInput.length,
-        url: 'https://tvjqpmxugitehucwhdbk.supabase.co/functions/v1/therapy-api?action=sendMessage'
-      });
-
-      // Add user message to UI immediately
-      const userMessage: Message = {
-        id: Date.now().toString(),
-        text: userInput,
-        isUser: true,
-        timestamp: new Date()
-      };
-      
-      console.log('➕ Adding user message to UI');
-      setMessages(prevMessages => {
-        const updated = [...prevMessages, userMessage];
-        console.log('📝 Updated messages count:', updated.length);
-        return updated;
-      });
       
       const response = await fetch('https://tvjqpmxugitehucwhdbk.supabase.co/functions/v1/therapy-api?action=sendMessage', {
         method: 'POST',
@@ -259,7 +237,6 @@ const Therapy = () => {
       });
 
       console.log('📡 SendMessage response status:', response.status);
-      console.log('📡 SendMessage response headers:', Object.fromEntries(response.headers.entries()));
 
       if (!response.ok) {
         const errorText = await response.text();
@@ -279,14 +256,11 @@ const Therapy = () => {
       console.log('✅ AI response received:', {
         hasReply: !!aiData.reply,
         replyLength: aiData.reply?.length,
-        mode: aiData.mode,
-        sessionId: aiData.sessionId,
         remainingMessages: aiData.remainingMessages
       });
       
       if (!aiData.reply) {
-        console.error('❌ No reply field in AI response:', aiData);
-        throw new Error('Invalid AI response structure - missing reply field');
+        throw new Error('Invalid AI response - missing reply field');
       }
       
       const aiResponse: Message = {
@@ -296,27 +270,17 @@ const Therapy = () => {
         timestamp: new Date()
       };
       
-      console.log('🎯 Adding AI response to messages');
-      
-      setMessages(prevMessages => {
-        const updatedMessages = [...prevMessages, aiResponse];
-        console.log('📝 Final messages array length:', updatedMessages.length);
-        return updatedMessages;
-      });
-      
+      setMessages(prevMessages => [...prevMessages, aiResponse]);
       setMessageCount(prev => prev + 1);
+      
       console.log('✅ Message exchange completed successfully');
       
     } catch (error) {
       console.error('❌ Error in handleSendMessage:', error);
-      
       toast.error('Failed to get AI response: ' + error.message);
       
       // Remove user message from UI on error
-      setMessages(prevMessages => {
-        console.log('🔄 Removing last user message due to error');
-        return prevMessages.slice(0, -1);
-      });
+      setMessages(prevMessages => prevMessages.slice(0, -1));
     } finally {
       setIsLoading(false);
     }
@@ -485,7 +449,7 @@ const Therapy = () => {
               </div>
             )}
 
-            {/* Chat Area with Full-Screen Mobile Design */}
+            {/* Chat Area */}
             <div className={`${isMobile 
               ? 'rounded-none border-0 bg-black/5 backdrop-blur-md flex-1 flex flex-col pb-24' 
               : 'glass-effect rounded-xl border border-white/30 backdrop-blur-md flex-1 flex flex-col p-8 mb-8 shadow-2xl'
