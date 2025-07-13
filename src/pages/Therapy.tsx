@@ -24,6 +24,8 @@ interface Message {
   isUser: boolean;
   timestamp: Date;
   images?: string[];
+  mode?: string;
+  isTransition?: boolean;
 }
 
 const Therapy = () => {
@@ -37,6 +39,7 @@ const Therapy = () => {
   
   const [selectedMode, setSelectedMode] = useState<TherapyMode>('evolve');
   const [messages, setMessages] = useState<Message[]>([]);
+  const [currentDetectedMode, setCurrentDetectedMode] = useState<string | null>(null);
   const [inputText, setInputText] = useState('');
   const [showReflectiveCheckIn, setShowReflectiveCheckIn] = useState(false);
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
@@ -141,7 +144,13 @@ const Therapy = () => {
     setMessages(prevMessages => [...prevMessages, userMessage]);
 
     try {
-      console.log('🚀 Sending message to /api/chat');
+      // Prepare conversation history for mode detection
+      const conversationHistory = messages.map(msg => ({
+        role: msg.isUser ? 'user' : 'assistant',
+        content: msg.text
+      }));
+
+      console.log('🚀 Sending message to /api/chat with mode detection');
       
       const response = await fetch('/api/chat', {
         method: 'POST',
@@ -149,7 +158,9 @@ const Therapy = () => {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          message: userInput
+          message: userInput,
+          conversationHistory,
+          previousMode: currentDetectedMode
         })
       });
 
@@ -161,17 +172,44 @@ const Therapy = () => {
       }
 
       const data = await response.json();
-      console.log('✅ AI response received');
+      console.log('✅ AI response received:', { 
+        mode: data.mode, 
+        modeChanged: data.modeChanged,
+        hasTransition: !!data.transitionMessage 
+      });
       
       if (!data.reply) {
         throw new Error('Invalid AI response - missing reply field');
+      }
+
+      // Update current detected mode
+      if (data.mode) {
+        setCurrentDetectedMode(data.mode);
+      }
+
+      // Add transition message if mode changed
+      if (data.modeChanged && data.transitionMessage) {
+        const transitionMessage: Message = {
+          id: `transition-${Date.now()}`,
+          text: data.transitionMessage,
+          isUser: false,
+          timestamp: new Date(),
+          isTransition: true,
+          mode: data.mode
+        };
+        
+        setMessages(prevMessages => [...prevMessages, transitionMessage]);
+        
+        // Small delay before showing AI response for better UX
+        await new Promise(resolve => setTimeout(resolve, 1000));
       }
       
       const aiResponse: Message = {
         id: (Date.now() + 1).toString(),
         text: data.reply,
         isUser: false,
-        timestamp: new Date()
+        timestamp: new Date(),
+        mode: data.mode
       };
       
       setMessages(prevMessages => [...prevMessages, aiResponse]);
@@ -371,21 +409,39 @@ const Therapy = () => {
                   messages.map((message) => (
                     <div
                       key={message.id}
-                      className={`flex ${message.isUser ? 'justify-end' : 'justify-start'} mb-4`}
+                      className={`flex ${
+                        message.isTransition 
+                          ? 'justify-center' 
+                          : message.isUser 
+                            ? 'justify-end' 
+                            : 'justify-start'
+                      } mb-4`}
                     >
                       <div
-                        className={`${isMobile ? 'max-w-[85%]' : 'max-w-2xl'} p-5 rounded-2xl backdrop-blur-sm ${
-                          message.isUser
-                            ? 'bg-gradient-to-r from-yellow-500/80 to-orange-500/80 text-white shadow-lg border border-white/10'
-                            : 'bg-white/20 text-white border border-white/30 shadow-lg'
+                        className={`${
+                          message.isTransition
+                            ? 'px-4 py-2 bg-gradient-to-r from-purple-500/40 to-blue-500/40 border border-purple-400/50 text-purple-100 text-sm rounded-full'
+                            : `${isMobile ? 'max-w-[85%]' : 'max-w-2xl'} p-5 rounded-2xl backdrop-blur-sm ${
+                                message.isUser
+                                  ? 'bg-gradient-to-r from-yellow-500/80 to-orange-500/80 text-white shadow-lg border border-white/10'
+                                  : 'bg-white/20 text-white border border-white/30 shadow-lg'
+                              }`
                         }`}
                       >
-                        <p className={`${isMobile ? 'text-base leading-relaxed' : 'text-base leading-relaxed'}`}>{message.text}</p>
-                        <p className={`text-xs mt-3 ${
-                          message.isUser ? 'text-white/70' : 'text-white/60'
+                        <p className={`${
+                          message.isTransition 
+                            ? 'text-center font-medium' 
+                            : `${isMobile ? 'text-base leading-relaxed' : 'text-base leading-relaxed'}`
                         }`}>
-                          {message.timestamp.toLocaleTimeString()}
+                          {message.text}
                         </p>
+                        {!message.isTransition && (
+                          <p className={`text-xs mt-3 ${
+                            message.isUser ? 'text-white/70' : 'text-white/60'
+                          }`}>
+                            {message.timestamp.toLocaleTimeString()}
+                          </p>
+                        )}
                       </div>
                     </div>
                   ))
