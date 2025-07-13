@@ -29,15 +29,11 @@ interface Message {
 const Therapy = () => {
   const { user, isPremium } = useAuth();
   const isMobile = useIsMobile();
-  const { stats, refetch: refetchStats } = useUserStats();
-  const { 
-    sessions, 
-    currentSession, 
-    setCurrentSession, 
-    createSession, 
-    updateSession,
-    generateSessionTitle 
-  } = useTherapySessions();
+  
+  // Disabled Supabase hooks - keep for UI compatibility
+  const stats = { messagesUsedToday: 0, remainingMessages: 50, totalSessions: 0, isPremium: false };
+  const sessions = [];
+  const currentSession = null;
   
   const [selectedMode, setSelectedMode] = useState<TherapyMode>('evolve');
   const [messages, setMessages] = useState<Message[]>([]);
@@ -100,110 +96,30 @@ const Therapy = () => {
     evolve: '/lovable-uploads/63bfd61c-32c7-4ddb-aa9a-6c5a6d885cc6.png'
   };
 
-  // Load messages from current session
+  // Disabled session loading - keep for UI compatibility
   useEffect(() => {
-    if (currentSession) {
-      loadMessagesForSession(currentSession.id);
-      setSelectedMode(currentSession.mode.toLowerCase() as TherapyMode);
-    } else {
-      setMessages([]);
-    }
-  }, [currentSession]);
+    // Keep messages empty for fresh start
+    setMessages([]);
+  }, []);
 
-  const loadMessagesForSession = async (sessionId: string) => {
-    if (!user) {
-      console.error('❌ No user available for loading messages');
-      return;
-    }
-
-    try {
-      console.log('🔍 Loading messages for session:', sessionId);
-      const token = (await supabase.auth.getSession()).data.session?.access_token;
-      
-      if (!token) {
-        console.error('❌ No auth token available');
-        toast.error('Authentication required');
-        return;
-      }
-
-      const response = await fetch(`https://tvjqpmxugitehucwhdbk.supabase.co/functions/v1/therapy-api?action=getMessages&sessionId=${sessionId}`, {
-        method: 'GET',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-      });
-
-      console.log('📡 getMessages response status:', response.status);
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error('❌ getMessages error response:', errorText);
-        toast.error('Failed to load message history');
-        return;
-      }
-
-      const data = await response.json();
-      console.log('📋 getMessages response data:', data);
-      
-      const formattedMessages: Message[] = (data.messages || []).map(msg => ({
-        id: msg.id,
-        text: msg.content,
-        isUser: msg.role === 'user',
-        timestamp: new Date(msg.created_at)
-      }));
-
-      console.log('✅ Loaded', formattedMessages.length, 'messages from database');
-      setMessages(formattedMessages);
-    } catch (error) {
-      console.error('❌ Error loading messages:', error);
-      toast.error('Failed to load messages: ' + (error instanceof Error ? error.message : 'Unknown error'));
-    }
-  };
-
-  const handleSessionSelect = (session: TherapySession) => {
-    console.log('🎯 Selecting session:', session.id);
-    setCurrentSession(session);
+  const handleSessionSelect = (session: any) => {
+    // Disabled - keep for UI compatibility
+    console.log('🎯 Session selection disabled');
     setIsMobileSidebarOpen(false);
   };
 
   const handleModeSelect = async (mode: TherapyMode) => {
     console.log('🎛️ Mode selected:', mode);
     setSelectedMode(mode);
-    
-    if (!currentSession) {
-      console.log('📝 Creating new session for mode:', mode);
-      const newSession = await createSession(mode.charAt(0).toUpperCase() + mode.slice(1), 'New Session');
-      if (newSession) {
-        setMessages([]);
-        console.log('✅ New session created and messages cleared');
-      }
-    } else {
-      console.log('📝 Updating existing session mode');
-      await updateSession(currentSession.id, { mode: mode.charAt(0).toUpperCase() + mode.slice(1) });
-    }
+    // Clear messages for fresh start with new mode
+    setMessages([]);
   };
 
   const handleSendMessage = async () => {
     console.log('🚀 handleSendMessage called');
-    console.log('📝 Input text:', inputText?.substring(0, 50) + '...');
-    console.log('👤 User:', user?.id);
-    console.log('📊 Stats:', stats);
     
-    if (!user) {
-      console.error('❌ No user authenticated');
-      toast.error('Please log in to send messages');
-      return;
-    }
-
     if (!inputText?.trim()) {
       console.log('❌ Empty input text, returning early');
-      return;
-    }
-    
-    const maxMessages = isPremium ? 300 : 50;
-    if (stats.messagesUsedToday >= maxMessages) {
-      toast.error(`Daily limit reached! ${isPremium ? 'Premium' : 'Free'} users get ${maxMessages} messages per day.`);
       return;
     }
 
@@ -225,100 +141,46 @@ const Therapy = () => {
     setMessages(prevMessages => [...prevMessages, userMessage]);
 
     try {
-      const token = (await supabase.auth.getSession()).data.session?.access_token;
+      console.log('🚀 Sending message to /api/chat');
       
-      if (!token) {
-        throw new Error('No authentication token available');
-      }
-
-      // Create session if this is the first message
-      let sessionToUse = currentSession;
-      if (!sessionToUse) {
-        console.log('📝 Creating new session for first message...');
-        sessionToUse = await createSession(selectedMode, generateSessionTitle(userInput));
-        if (!sessionToUse) {
-          throw new Error('Failed to create session');
-        }
-      }
-
-      console.log('🚀 Making API call to send message');
-      console.log('📋 Request payload:', {
-        message: userInput.substring(0, 50) + '...',
-        sessionId: sessionToUse.id,
-        mode: selectedMode
-      });
-      
-      const response = await fetch('https://tvjqpmxugitehucwhdbk.supabase.co/functions/v1/therapy-api?action=sendMessage', {
+      const response = await fetch('/api/chat', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
         },
         body: JSON.stringify({
-          message: userInput,
-          sessionId: sessionToUse.id,
-          mode: selectedMode
+          message: userInput
         })
       });
 
-      console.log('📡 SendMessage response status:', response.status);
-      console.log('📡 SendMessage response headers:', [...response.headers.entries()]);
+      console.log('📡 Chat API response status:', response.status);
 
       if (!response.ok) {
-        const errorText = await response.text();
-        console.error('❌ SendMessage error response:', errorText);
-        
-        let errorData;
-        try {
-          errorData = JSON.parse(errorText);
-        } catch {
-          errorData = { error: errorText };
-        }
-        
-        throw new Error(errorData.error || `HTTP ${response.status}: ${errorText}`);
+        const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
+        throw new Error(errorData.error || `HTTP ${response.status}`);
       }
 
-      const aiData = await response.json();
-      console.log('✅ AI response received:', {
-        hasReply: !!aiData.reply,
-        replyLength: aiData.reply?.length,
-        remainingMessages: aiData.remainingMessages,
-        mode: aiData.mode,
-        sessionId: aiData.sessionId
-      });
+      const data = await response.json();
+      console.log('✅ AI response received');
       
-      if (!aiData.reply) {
+      if (!data.reply) {
         throw new Error('Invalid AI response - missing reply field');
       }
       
       const aiResponse: Message = {
         id: (Date.now() + 1).toString(),
-        text: aiData.reply,
+        text: data.reply,
         isUser: false,
         timestamp: new Date()
       };
       
       setMessages(prevMessages => [...prevMessages, aiResponse]);
-      
-      // Refresh user stats
-      await refetchStats();
-      
       console.log('✅ Message exchange completed successfully');
       
     } catch (error) {
       console.error('❌ Error in handleSendMessage:', error);
       const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
-      
-      // Show specific error messages
-      if (errorMessage.includes('Daily limit')) {
-        toast.error('Daily message limit reached. Please upgrade to premium for more messages.');
-      } else if (errorMessage.includes('Invalid authentication')) {
-        toast.error('Authentication failed. Please log in again.');
-      } else if (errorMessage.includes('Failed to create session')) {
-        toast.error('Unable to create chat session. Please try again.');
-      } else {
-        toast.error('Failed to get AI response: ' + errorMessage);
-      }
+      toast.error('Failed to get AI response: ' + errorMessage);
       
       // Remove user message from UI on error
       setMessages(prevMessages => prevMessages.slice(0, -1));
@@ -329,17 +191,7 @@ const Therapy = () => {
 
   const selectedModeData = modes.find(mode => mode.id === selectedMode);
 
-  // Show loading or auth required states
-  if (!user) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-gray-900 to-gray-800">
-        <div className="text-center text-white">
-          <h2 className="text-2xl font-bold mb-4">Authentication Required</h2>
-          <p>Please log in to access the therapy chat.</p>
-        </div>
-      </div>
-    );
-  }
+  // Disable auth requirement - allow anonymous usage for now
 
   return (
     <div className="min-h-screen relative overflow-hidden smooth-scroll">
