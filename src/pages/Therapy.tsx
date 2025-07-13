@@ -51,7 +51,7 @@ const Therapy = () => {
       borderColor: 'border-purple-500',
       bgColor: 'bg-purple-500/10',
       glowColor: 'shadow-purple-500/30',
-      pulseColor: 'animate-pulse bg-purple-400/20',
+      pulseColor: 'bg-purple-400/10',
       description: 'Process your thoughts and emotions with gentle guidance'
     },
     {
@@ -62,7 +62,7 @@ const Therapy = () => {
       borderColor: 'border-blue-500',
       bgColor: 'bg-blue-500/10',
       glowColor: 'shadow-blue-500/30',
-      pulseColor: 'animate-pulse bg-amber-400/20',
+      pulseColor: 'bg-blue-400/10',
       description: 'Heal from trauma and difficult experiences'
     },
     {
@@ -73,7 +73,7 @@ const Therapy = () => {
       borderColor: 'border-green-500',
       bgColor: 'bg-green-500/10',
       glowColor: 'shadow-green-500/30',
-      pulseColor: 'animate-pulse bg-green-400/20',
+      pulseColor: 'bg-green-400/10',
       description: 'Reconstruct your sense of self and relationships'
     },
     {
@@ -84,7 +84,7 @@ const Therapy = () => {
       borderColor: 'border-yellow-500',
       bgColor: 'bg-yellow-500/10',
       glowColor: 'shadow-yellow-500/30',
-      pulseColor: 'animate-pulse bg-gradient-to-r from-blue-400/20 to-violet-400/20',
+      pulseColor: 'bg-gradient-to-r from-yellow-400/10 to-orange-400/10',
       description: 'Grow beyond your current limitations'
     }
   ];
@@ -211,7 +211,7 @@ const Therapy = () => {
       {isMobile ? (
         <>
           <div className="absolute inset-0 bg-gradient-to-br from-black/70 via-purple-900/30 to-blue-900/50 backdrop-blur-[2px] z-[-5]" />
-          <div className="absolute inset-0 z-[-4] opacity-15 bg-gradient-to-r from-yellow-400/20 via-purple-400/15 to-blue-400/20" />
+          <div className="absolute inset-0 z-[-4] opacity-10 bg-gradient-to-r from-yellow-400/10 via-purple-400/10 to-blue-400/10" />
         </>
       ) : (
         <>
@@ -354,16 +354,6 @@ const Therapy = () => {
               </div>
             )}
 
-            {/* Mode Header - Above Chat Area */}
-            {isMobile && (
-              <div className="px-6 py-4 border-b border-white/10">
-                <div className="text-center text-white/90">
-                  <div className="text-4xl mb-2">🟡</div>
-                  <h2 className="text-xl font-bold mb-1">Evolve Mode</h2>
-                  <p className="text-sm text-white/70">Grow beyond your current limitations</p>
-                </div>
-              </div>
-            )}
 
             {/* Chat Area */}
             <div className={`${isMobile 
