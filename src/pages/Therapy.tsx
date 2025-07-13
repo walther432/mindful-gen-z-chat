@@ -110,11 +110,12 @@ const Therapy = () => {
 
   const loadMessagesForSession = async (sessionId: string) => {
     try {
+      console.log('🔍 Loading messages for session:', sessionId);
       const { data, error } = await supabase
-        .from('therapy_messages')
+        .from('chat_messages')
         .select('*')
         .eq('session_id', sessionId)
-        .order('timestamp', { ascending: true });
+        .order('created_at', { ascending: true });
 
       if (error) {
         console.error('Error loading messages:', error);
@@ -124,10 +125,11 @@ const Therapy = () => {
       const formattedMessages: Message[] = (data || []).map(msg => ({
         id: msg.id,
         text: msg.content,
-        isUser: msg.sender === 'user',
-        timestamp: new Date(msg.timestamp)
+        isUser: msg.role === 'user',
+        timestamp: new Date(msg.created_at)
       }));
 
+      console.log('📋 Loaded', formattedMessages.length, 'messages from database');
       setMessages(formattedMessages);
     } catch (error) {
       console.error('Error loading messages:', error);
@@ -154,21 +156,24 @@ const Therapy = () => {
 
   const saveMessageToDatabase = async (sessionId: string, message: Message) => {
     try {
+      console.log('💾 Saving message to database:', { sessionId, isUser: message.isUser, text: message.text.substring(0, 50) });
       const { error } = await supabase
-        .from('therapy_messages')
+        .from('chat_messages')
         .insert({
           session_id: sessionId,
           user_id: (await supabase.auth.getUser()).data.user?.id,
           content: message.text,
-          sender: message.isUser ? 'user' : 'ai',
-          timestamp: message.timestamp.toISOString()
+          role: message.isUser ? 'user' : 'assistant',
+          created_at: message.timestamp.toISOString()
         });
 
       if (error) {
-        console.error('Error saving message:', error);
+        console.error('❌ Error saving message to database:', error);
+      } else {
+        console.log('✅ Message saved to database successfully');
       }
     } catch (error) {
-      console.error('Error saving message:', error);
+      console.error('❌ Error saving message to database:', error);
     }
   };
 
@@ -189,14 +194,9 @@ const Therapy = () => {
     const userInput = inputText.trim();
     console.log('📤 Processing user input:', userInput);
 
-    // Create session if needed
+    // Create session if needed - Let backend handle this
     if (!currentSession) {
-      console.log('📝 Creating new session...');
-      const newSession = await createSession('Reflect', 'New Session');
-      if (!newSession) {
-        console.error('❌ Failed to create session');
-        return;
-      }
+      console.log('📝 No current session - backend will create one');
     }
 
     const userMessage: Message = {
@@ -217,16 +217,7 @@ const Therapy = () => {
     setMessageCount(prev => prev + 1);
     setIsLoading(true);
 
-    // Save user message to database
-    if (currentSession) {
-      await saveMessageToDatabase(currentSession.id, userMessage);
-      
-      // Update session title if it's the first message
-      if (messages.length <= 1) {
-        const newTitle = generateSessionTitle(userInput);
-        await updateSession(currentSession.id, { title: newTitle });
-      }
-    }
+    // Backend will handle message saving and session creation
 
     // Call backend API to get AI response
     try {
@@ -280,6 +271,7 @@ const Therapy = () => {
       };
       
       console.log('🎯 Adding AI response to messages:', aiResponse);
+      console.log('🎯 GPT Reply Received:', aiData.reply);
       
       // Add AI response to the UI
       setMessages(prevMessages => {
@@ -289,12 +281,19 @@ const Therapy = () => {
         return updatedMessages;
       });
       
-      // Save AI response to database
-      if (currentSession) {
-        await saveMessageToDatabase(currentSession.id, aiResponse);
+      // Update session data if returned from backend
+      if (aiData.sessionId && !currentSession) {
+        console.log('🆔 Session created by backend:', aiData.sessionId);
+        // Refresh sessions list to get the new session
+        // The useTherapySessions hook will handle this
       }
       
-      console.log('✅ AI response successfully added to UI and database');
+      // Update remaining message count
+      if (aiData.remainingMessages !== undefined) {
+        console.log('📊 Remaining messages:', aiData.remainingMessages);
+      }
+      
+      console.log('✅ AI response successfully added to UI');
       
     } catch (error) {
       console.error('❌ Error in handleSendMessage:', error);
