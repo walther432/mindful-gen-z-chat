@@ -154,28 +154,6 @@ const Therapy = () => {
     }
   };
 
-  const saveMessageToDatabase = async (sessionId: string, message: Message) => {
-    try {
-      console.log('💾 Saving message to database:', { sessionId, isUser: message.isUser, text: message.text.substring(0, 50) });
-      const { error } = await supabase
-        .from('chat_messages')
-        .insert({
-          session_id: sessionId,
-          user_id: (await supabase.auth.getUser()).data.user?.id,
-          content: message.text,
-          role: message.isUser ? 'user' : 'assistant',
-          created_at: message.timestamp.toISOString()
-        });
-
-      if (error) {
-        console.error('❌ Error saving message to database:', error);
-      } else {
-        console.log('✅ Message saved to database successfully');
-      }
-    } catch (error) {
-      console.error('❌ Error saving message to database:', error);
-    }
-  };
 
   const handleSendMessage = async () => {
     console.log('🔥 handleSendMessage called with inputText:', inputText);
@@ -217,7 +195,7 @@ const Therapy = () => {
     setMessageCount(prev => prev + 1);
     setIsLoading(true);
 
-    // Backend will handle message saving and session creation
+    
 
     // Call backend API to get AI response
     try {
@@ -228,13 +206,50 @@ const Therapy = () => {
         throw new Error('No authentication token available');
       }
 
-      console.log('🚀 Making API call to /api/chat with payload:', {
+      // Create session if this is the first message
+      let sessionToUse = currentSession?.id;
+      if (!sessionToUse) {
+        console.log('📝 Creating new session...');
+        const sessionResponse = await fetch('/api/createSession', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify({
+            title: generateSessionTitle(userInput),
+            mode: selectedMode,
+          }),
+        });
+        
+        if (!sessionResponse.ok) {
+          const errorData = await sessionResponse.json();
+          throw new Error(errorData.error || 'Failed to create session');
+        }
+        
+        const sessionData = await sessionResponse.json();
+        sessionToUse = sessionData.session.id;
+        
+        // Update current session state
+        const newSession: TherapySession = {
+          id: sessionData.session.id,
+          title: sessionData.session.title,
+          mode: sessionData.session.current_mode,
+          created_at: sessionData.session.created_at,
+          updated_at: sessionData.session.created_at,
+          user_id: sessionData.session.user_id
+        };
+        setCurrentSession(newSession);
+        console.log('✅ New session created:', sessionToUse);
+      }
+      
+      console.log('🚀 Making API call to /api/sendMessage with payload:', {
         message: userInput,
-        currentMode: selectedMode,
-        sessionId: currentSession?.id
+        sessionId: sessionToUse,
+        mode: selectedMode
       });
       
-      const response = await fetch('/api/chat', {
+      const response = await fetch('/api/sendMessage', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -242,8 +257,8 @@ const Therapy = () => {
         },
         body: JSON.stringify({
           message: userInput,
-          currentMode: selectedMode,
-          sessionId: currentSession?.id
+          sessionId: sessionToUse,
+          mode: selectedMode
         })
       });
 
@@ -281,34 +296,6 @@ const Therapy = () => {
         return updatedMessages;
       });
       
-      // Update session data if returned from backend - CRITICAL FIX
-      if (aiData.sessionId && !currentSession) {
-        console.log('🆔 Session created by backend, fetching session data:', aiData.sessionId);
-        
-        // Fetch the newly created session from database
-        try {
-          const { data: sessionData, error: sessionError } = await supabase
-            .from('chat_sessions')
-            .select('*')
-            .eq('id', aiData.sessionId)
-            .single();
-            
-          if (!sessionError && sessionData) {
-            const newSession: TherapySession = {
-              id: sessionData.id,
-              title: sessionData.title,
-              mode: sessionData.current_mode,
-              created_at: sessionData.created_at,
-              updated_at: sessionData.created_at,
-              user_id: sessionData.user_id
-            };
-            setCurrentSession(newSession);
-            console.log('✅ Session updated in frontend:', newSession);
-          }
-        } catch (err) {
-          console.error('❌ Error fetching session data:', err);
-        }
-      }
       
       // Update remaining message count
       if (aiData.remainingMessages !== undefined) {
