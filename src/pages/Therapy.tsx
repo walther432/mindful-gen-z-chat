@@ -65,6 +65,7 @@ const Therapy = () => {
   const [selectedMode, setSelectedMode] = useState<TherapyMode>('evolve');
   const [messages, setMessages] = useState<Message[]>([]);
   const [currentDetectedMode, setCurrentDetectedMode] = useState<string | null>(null);
+  const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
   const [inputText, setInputText] = useState('');
   const [showReflectiveCheckIn, setShowReflectiveCheckIn] = useState(false);
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
@@ -146,8 +147,8 @@ const Therapy = () => {
   const handleSendMessage = async () => {
     console.log('🚀 handleSendMessage called');
     
-    if (!inputText?.trim()) {
-      console.log('❌ Empty input text, returning early');
+    if (!inputText?.trim() || !user) {
+      console.log('❌ Empty input text or no user, returning early');
       return;
     }
 
@@ -158,69 +159,71 @@ const Therapy = () => {
     setInputText('');
     setIsLoading(true);
 
-    // Add user message to UI immediately
-    const userMessage: Message = {
-      id: Date.now().toString(),
-      text: userInput,
-      isUser: true,
-      timestamp: new Date()
-    };
-    
-    setMessages(prevMessages => [...prevMessages, userMessage]);
-
     try {
-      // Prepare conversation history for mode detection
-      const conversationHistory = messages.map(msg => ({
-        role: msg.isUser ? 'user' : 'assistant',
-        content: msg.text
-      }));
+      // Create session if none exists
+      if (!currentSessionId) {
+        console.log('🔄 Creating new session...');
+        const sessionResponse = await supabase.functions.invoke('therapy-api', {
+          body: { 
+            action: 'createSession',
+            mode: selectedMode,
+            title: `${selectedMode.charAt(0).toUpperCase() + selectedMode.slice(1)} Session - ${new Date().toLocaleDateString()}`
+          }
+        });
 
-      console.log('🚀 Sending message to /api/chat with mode detection');
+        if (sessionResponse.error) {
+          throw new Error('Failed to create session: ' + sessionResponse.error.message);
+        }
+
+        setCurrentSessionId(sessionResponse.data.sessionId);
+        console.log('✅ Session created:', sessionResponse.data.sessionId);
+      }
+
+      // Prepare conversation history for mode detection
+      const conversationHistory = messages.map(msg => msg.text);
+
+      console.log('🚀 Sending message to therapy-api with mode detection');
       
-      const response = await fetch('/api/chat', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
+      // Send message with mode detection
+      const response = await supabase.functions.invoke('therapy-api', {
+        body: {
+          action: 'sendMessage',
+          sessionId: currentSessionId,
           message: userInput,
           conversationHistory,
-          previousMode: currentDetectedMode
-        })
+          previousMode: currentDetectedMode || selectedMode
+        }
       });
 
-      console.log('📡 Chat API response status:', response.status);
+      console.log('📡 Therapy API response:', response);
 
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
-        throw new Error(errorData.error || `HTTP ${response.status}`);
+      if (response.error) {
+        throw new Error(response.error.message || 'Failed to get response');
       }
 
-      const data = await response.json();
-      console.log('✅ AI response received:', { 
-        mode: data.mode, 
-        modeChanged: data.modeChanged,
-        hasTransition: !!data.transitionMessage 
-      });
+      const data = response.data;
       
-      if (!data.reply) {
-        throw new Error('Invalid AI response - missing reply field');
-      }
-
-      // Update current detected mode
-      if (data.mode) {
-        setCurrentDetectedMode(data.mode);
-      }
-
-      // Add transition message if mode changed
+      // Add user message to UI
+      const userMessage: Message = {
+        id: Date.now().toString(),
+        text: userInput,
+        isUser: true,
+        timestamp: new Date(),
+        mode: data.detectedMode || currentDetectedMode || selectedMode
+      };
+      
+      setMessages(prevMessages => [...prevMessages, userMessage]);
+      
+      // Handle mode transition if it changed
       if (data.modeChanged && data.transitionMessage) {
+        console.log('🔄 Mode changed, showing transition message');
         const transitionMessage: Message = {
           id: `transition-${Date.now()}`,
           text: data.transitionMessage,
           isUser: false,
           timestamp: new Date(),
           isTransition: true,
-          mode: data.mode
+          mode: data.detectedMode
         };
         
         setMessages(prevMessages => [...prevMessages, transitionMessage]);
@@ -229,14 +232,19 @@ const Therapy = () => {
         await new Promise(resolve => setTimeout(resolve, 1000));
       }
       
+      // Update detected mode
+      if (data.detectedMode) {
+        setCurrentDetectedMode(data.detectedMode);
+      }
+
       const aiResponse: Message = {
         id: (Date.now() + 1).toString(),
-        text: data.reply,
+        text: data.message,
         isUser: false,
         timestamp: new Date(),
-        mode: data.mode
+        mode: data.detectedMode || currentDetectedMode || selectedMode
       };
-      
+
       setMessages(prevMessages => [...prevMessages, aiResponse]);
       console.log('✅ Message exchange completed successfully');
       
@@ -244,9 +252,6 @@ const Therapy = () => {
       console.error('❌ Error in handleSendMessage:', error);
       const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
       toast.error('Failed to get AI response: ' + errorMessage);
-      
-      // Remove user message from UI on error
-      setMessages(prevMessages => prevMessages.slice(0, -1));
     } finally {
       setIsLoading(false);
     }
